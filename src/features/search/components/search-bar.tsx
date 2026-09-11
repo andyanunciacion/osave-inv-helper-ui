@@ -52,7 +52,7 @@ export function SearchBar({
           id="search-query"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Item name, item code, date, or delivery code"
+          placeholder="Item name, item code, or delivery code"
           autoFocus
         />
       </div>
@@ -101,7 +101,10 @@ export function SearchBar({
                   type="button"
                   size="sm"
                   disabled={!rangeLabel?.trim()}
-                  onClick={() => setCalendarOpen(false)}
+                  onClick={() => {
+                    setCalendarOpen(false);
+                    onSubmit();
+                  }}
                 >
                   Apply
                 </Button>

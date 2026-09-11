@@ -18,7 +18,7 @@ export function SearchHeader() {
       </Button>
       <Button nativeButton={false} render={<Link href="/upload" />}>
         <Upload className="size-4" aria-hidden="true" />
-        Upload receipt
+        Upload delivery receipt
       </Button>
     </div>
   );
