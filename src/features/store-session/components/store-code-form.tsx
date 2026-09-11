@@ -15,9 +15,14 @@ export function StoreCodeForm() {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm text-muted-foreground">
-          Store: <span className="font-medium text-foreground">{storeCode}</span>
+          Store:{" "}
+          <span className="font-medium text-card-foreground">{storeCode}</span>
         </span>
-        <Button variant="outline" onClick={clearStoreCode}>
+        <Button
+          variant="outline"
+          className="border-primary text-primary hover:bg-primary/10"
+          onClick={clearStoreCode}
+        >
           Change store
         </Button>
       </div>
@@ -38,11 +43,15 @@ export function StoreCodeForm() {
           id="store-code"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="e.g. ST01"
+          placeholder="e.g. S09590203FG223jd"
           autoFocus
         />
       </div>
-      <Button type="submit" className="w-full sm:w-auto" disabled={!draft.trim()}>
+      <Button
+        type="submit"
+        className="w-full sm:w-auto"
+        disabled={!draft.trim()}
+      >
         Continue
       </Button>
     </form>
