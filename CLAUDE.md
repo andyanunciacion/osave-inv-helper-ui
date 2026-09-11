@@ -72,4 +72,5 @@ Primary users are store staff on a phone, one-handed, often mid-task with a rece
 
 - Path alias `@/*` → `src/*`.
 - shadcn/ui components live in `src/components/ui` and are added via `npx shadcn add <component>` — don't hand-write primitives that shadcn already provides.
+- Any shadcn/ui component is available to use freely. If a feature needs one that isn't in `src/components/ui` yet, run `npx shadcn add <component>` to pull it in automatically rather than asking first or hand-rolling the primitive.
 - Keep `src/app/*/page.tsx` files thin: import and compose feature components, no inline business logic.
