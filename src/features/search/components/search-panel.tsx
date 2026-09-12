@@ -1,16 +1,22 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import type { DateRange } from "react-day-picker";
 import { useSearchFilters } from "../hooks/use-search-filters";
-import type { RecentUpload } from "../types";
+import { computeQuickRange } from "../lib/date-range";
+import { buildResultsSearchParams } from "../lib/search-params";
+import type { QuickRangeKey, RecentUpload } from "../types";
 import { QuickRangePills } from "./quick-range-pills";
 import { RecentUploadsBar } from "./recent-uploads-bar";
 import { SearchBar } from "./search-bar";
 
-// Owns the shared search-filter state (query + date range) so the search
-// bar's calendar popover and the quick-range pills stay in sync. No data
-// fetching yet — wire a delivery-search query hook into handleSubmit once
-// features/deliveries lands.
+// Owns the filter-editing state for /search. Results now live on their own
+// page (/search/results, URL-driven so they're linkable/back-button-
+// friendly) — this component's job is just building that URL and
+// navigating, on submit, on applying a date range, or on picking a
+// quick-range/recent-upload shortcut.
 export function SearchPanel() {
+  const router = useRouter();
   const {
     query,
     setQuery,
@@ -22,8 +28,23 @@ export function SearchPanel() {
     quickRangeOptions,
   } = useSearchFilters();
 
+  const goToResults = (overrides: { query?: string; range?: DateRange | undefined } = {}) => {
+    const nextQuery = overrides.query ?? query;
+    const nextRange = overrides.range ?? range;
+    if (!nextQuery.trim() && !nextRange?.from) return;
+    const params = buildResultsSearchParams({ query: nextQuery, range: nextRange });
+    router.push(`/search/results?${params.toString()}`);
+  };
+
   const handleSelectRecentUpload = (upload: RecentUpload) => {
     setQuery(upload.deliveryCode);
+    goToResults({ query: upload.deliveryCode });
+  };
+
+  const handleSelectQuickRange = (key: QuickRangeKey) => {
+    const wasActive = activeQuickRange === key;
+    selectQuickRange(key);
+    if (!wasActive) goToResults({ range: computeQuickRange(key) });
   };
 
   return (
@@ -34,13 +55,14 @@ export function SearchPanel() {
         range={range}
         onRangeChange={setRange}
         onClearRange={clearRange}
-        onSubmit={() => {}}
+        onSubmit={() => goToResults()}
+        onApplyRange={() => goToResults()}
       />
       <RecentUploadsBar onSelect={handleSelectRecentUpload} />
       <QuickRangePills
         options={quickRangeOptions}
         activeKey={activeQuickRange}
-        onSelect={selectQuickRange}
+        onSelect={handleSelectQuickRange}
       />
     </div>
   );

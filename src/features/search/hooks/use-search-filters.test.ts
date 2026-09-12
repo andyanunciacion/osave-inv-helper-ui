@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { computeQuickRange, useSearchFilters } from "./use-search-filters";
+import { computeQuickRange } from "../lib/date-range";
+import { useSearchFilters } from "./use-search-filters";
 
 // Fixed reference point: Wed 2026-09-16 12:00 local time.
 const REFERENCE_DATE = new Date(2026, 8, 16, 12, 0, 0);

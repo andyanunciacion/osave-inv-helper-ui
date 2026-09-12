@@ -12,7 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { formatDateRangeLabel } from "../hooks/use-search-filters";
+import { formatDateRangeLabel } from "../lib/date-range";
 
 interface SearchBarProps {
   query: string;
@@ -21,6 +21,7 @@ interface SearchBarProps {
   onRangeChange: (range: DateRange | undefined) => void;
   onClearRange: () => void;
   onSubmit: () => void;
+  onApplyRange: () => void;
 }
 
 // Thin: local popover-open state only. Filter state and date-range math
@@ -32,6 +33,7 @@ export function SearchBar({
   onRangeChange,
   onClearRange,
   onSubmit,
+  onApplyRange,
 }: SearchBarProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const rangeLabel = formatDateRangeLabel(range);
@@ -52,7 +54,7 @@ export function SearchBar({
           id="search-query"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Item name, item code, date, or delivery code"
+          placeholder="Item name, item code, or delivery code"
           autoFocus
         />
       </div>
@@ -102,7 +104,10 @@ export function SearchBar({
                   size="sm"
                   className="cursor-pointer"
                   disabled={!rangeLabel?.trim()}
-                  onClick={() => setCalendarOpen(false)}
+                  onClick={() => {
+                    setCalendarOpen(false);
+                    onApplyRange();
+                  }}
                 >
                   Apply
                 </Button>
