@@ -16,7 +16,11 @@ export function SearchHeader() {
       >
         <ArrowLeft className="size-5" aria-hidden="true" />
       </Button>
-      <Button nativeButton={false} render={<Link href="/upload" />}>
+      <Button
+        variant="ghost"
+        nativeButton={false}
+        render={<Link href="/upload" />}
+      >
         <Upload className="size-4" aria-hidden="true" />
         Upload receipt
       </Button>
