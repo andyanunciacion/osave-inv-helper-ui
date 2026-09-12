@@ -160,9 +160,11 @@ Enter or scan store code → store it in `localStorage` → every screen after t
 5. On confirm, the delivery and its rows are written. A duplicate `delivery_code` (same receipt uploaded twice) is rejected at the `deliveries` table level; a duplicate `(delivery_code, item_code)` is rejected at the item level — both surfaced per-row, not as a whole-batch failure.
 
 **C. Search flow**
-- Free-text input: matched against `item_code` and `item_name`.
+- Free-text input: matched against `item_code`, `item_name`, and `delivery_code`.
 - Date picker (single or range): matched against `deliveries.delivery_date`.
-- Results are always grouped by delivery_code/date, per your spec — a search by item name can return the same item across several deliveries, shown as separate groups.
+- Results render on their own page, reached from the search screen on submit (not live-as-you-type), so filters are shareable/back-button-friendly via the URL.
+- Grouping: when a free-text query is present, results are grouped by delivery_code/date — a search by item name or item code can return the same item across several deliveries, shown as separate groups. When the search is **date-only** (a date/range is set and the text field is empty), results are instead shown as one unified list of items across every matching delivery, not separated by delivery_code — a date-only search is usually "what came in that day," not "which deliveries arrived." Each row in that unified list still carries its own delivery_code so the source stays traceable.
+- Since a single delivery can have 50-80 line items, a grouped result only shows the item(s) that actually matched the query, not the whole receipt — except an **exact** match on the delivery_code itself, which is treated as "show me this receipt": every item is shown and the group expands automatically. Any other match (a delivery-code fragment, or an item name/code, exact or partial) stays collapsed until tapped. The groups list itself also paginates for broad queries matching many deliveries, and item lists (an expanded group, or the unified view) are virtualized.
 
 ---
 
