@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,27 +10,16 @@ import { useStoreSession } from "../hooks/use-store-session";
 
 // Thin: only local input state + JSX. Session logic lives in useStoreSession.
 export function StoreCodeForm() {
-  const { storeCode, setStoreCode, clearStoreCode } = useStoreSession();
+  const { storeCode, setStoreCode } = useStoreSession();
   const [draft, setDraft] = useState("");
   const router = useRouter();
 
-  if (storeCode) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-sm text-muted-foreground">
-          Store:{" "}
-          <span className="font-medium text-card-foreground">{storeCode}</span>
-        </span>
-        <Button
-          variant="outline"
-          className="border-primary text-primary hover:bg-primary/10"
-          onClick={clearStoreCode}
-        >
-          Change store
-        </Button>
-      </div>
-    );
-  }
+  // Seed the draft from the stored code once it resolves (useStoreSession
+  // reports null on the server/first client render, then the real value
+  // after hydration). Guarded so it never clobbers an in-progress edit.
+  useEffect(() => {
+    if (storeCode) setDraft((prev) => prev || storeCode);
+  }, [storeCode]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -49,6 +38,7 @@ export function StoreCodeForm() {
             id="store-code"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onFocus={(event) => event.target.select()}
             placeholder="e.g. S09590203FG223jd"
             autoFocus
           />
@@ -66,9 +56,14 @@ export function StoreCodeForm() {
         <span className="text-xs text-muted-foreground">or</span>
         <hr className="flex-1 border-border" />
       </div>
-      <Button type="button" variant="outline" className="w-full">
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => router.push("/store-session/scan")}
+      >
         <QrCode className="size-4" aria-hidden="true" />
-        Scan store QR code
+        Scan/Upload store QR code
       </Button>
     </div>
   );

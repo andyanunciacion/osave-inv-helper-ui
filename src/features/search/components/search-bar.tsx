@@ -73,7 +73,7 @@ export function SearchBar({
               </Button>
             }
           />
-          <PopoverContent align="end" className="w-auto p-0">
+          <PopoverContent align="end" className="w-auto p-0 shadow-xl border">
             <Calendar
               mode="range"
               selected={range}
@@ -100,6 +100,7 @@ export function SearchBar({
                 <Button
                   type="button"
                   size="sm"
+                  className="cursor-pointer"
                   disabled={!rangeLabel?.trim()}
                   onClick={() => setCalendarOpen(false)}
                 >
@@ -109,7 +110,7 @@ export function SearchBar({
             </div>
           </PopoverContent>
         </Popover>
-        <Button type="submit" className="flex-1 sm:flex-initial">
+        <Button type="submit" className="flex-1 sm:flex-initial cursor-pointer">
           <Search className="size-4" aria-hidden="true" />
           Search
         </Button>
