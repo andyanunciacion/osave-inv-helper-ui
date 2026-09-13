@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,14 +12,19 @@ import { useStoreSession } from "../hooks/use-store-session";
 export function StoreCodeForm() {
   const { storeCode, setStoreCode } = useStoreSession();
   const [draft, setDraft] = useState("");
+  const [seededStoreCode, setSeededStoreCode] = useState<string | null>(null);
   const router = useRouter();
 
   // Seed the draft from the stored code once it resolves (useStoreSession
   // reports null on the server/first client render, then the real value
-  // after hydration). Guarded so it never clobbers an in-progress edit.
-  useEffect(() => {
-    if (storeCode) setDraft((prev) => prev || storeCode);
-  }, [storeCode]);
+  // after hydration). Adjusted during render rather than in an effect, per
+  // React's guidance for resetting state in response to a prop change —
+  // avoids the extra commit-then-effect-then-re-render round trip. Guarded
+  // so it never clobbers an in-progress edit.
+  if (storeCode && storeCode !== seededStoreCode) {
+    setSeededStoreCode(storeCode);
+    if (!draft) setDraft(storeCode);
+  }
 
   return (
     <div className="flex flex-col gap-3">
