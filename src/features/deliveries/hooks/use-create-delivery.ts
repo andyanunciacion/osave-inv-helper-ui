@@ -1,19 +1,27 @@
-import { useCallback } from "react";
-import { createDelivery } from "../lib/sample-store";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createDeliveryRequest } from "../lib/api";
 import type { CreateDeliveryResult, NewDeliveryInput } from "../types";
 
 // Public write API for the deliveries feature — upload's review screen
-// calls this on confirm. Kept as a thin wrapper around the sample store so
-// callers never reach into ../lib directly, which is what will make this
-// swap-in-place for a real `useMutation` against Supabase later.
+// calls this on confirm. A network/server error throws (the caller awaits
+// and catches it); a domain-level rejection (duplicate delivery, duplicate
+// items) is a normal resolved CreateDeliveryResult, not an error.
 export interface UseCreateDeliveryResult {
-  submitDelivery: (input: NewDeliveryInput) => CreateDeliveryResult;
+  submitDelivery: (input: NewDeliveryInput) => Promise<CreateDeliveryResult>;
 }
 
 export function useCreateDelivery(): UseCreateDeliveryResult {
-  const submitDelivery = useCallback((input: NewDeliveryInput) => {
-    return createDelivery(input);
-  }, []);
+  const queryClient = useQueryClient();
+  const { mutateAsync } = useMutation({
+    mutationFn: createDeliveryRequest,
+    onSuccess: (result, input) => {
+      if (result.status === "duplicate_delivery") return;
+      // Recent uploads / search results may already be on screen (e.g. via
+      // the recent-uploads bar) — invalidate rather than trying to patch
+      // every cached list by hand.
+      void queryClient.invalidateQueries({ queryKey: ["deliveries", input.store_code] });
+    },
+  });
 
-  return { submitDelivery };
+  return { submitDelivery: mutateAsync };
 }

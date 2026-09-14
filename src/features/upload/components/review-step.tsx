@@ -21,6 +21,7 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
     items,
     storeMismatch,
     stage,
+    submitError,
     updateHeaderField,
     updateItemField,
     addItem,
@@ -106,6 +107,14 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
           ))}
         </div>
       </div>
+
+      {submitError ? (
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertTitle>Couldn&apos;t save</AlertTitle>
+          <AlertDescription>{submitError}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="flex gap-2">
         <Button
