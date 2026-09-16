@@ -1,13 +1,6 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
-import { isDateWithinRange } from "../lib/date-range";
-import {
-  ensureSeedForStore,
-  getSnapshot,
-  listGroupsForStore,
-  subscribe,
-} from "../lib/sample-store";
-import { compareByItemCode } from "../lib/sort";
+import { fetchUnifiedSearch } from "../lib/api";
 import type { UnifiedItemRow } from "../types";
 
 // Backs the date-only search results view: when staff filter by date alone
@@ -28,25 +21,11 @@ export function useUnifiedItemSearch({
   storeCode,
   range,
 }: UseUnifiedItemSearchParams): UseUnifiedItemSearchResult {
-  useEffect(() => {
-    if (storeCode) ensureSeedForStore(storeCode);
-  }, [storeCode]);
+  const { data } = useQuery({
+    queryKey: ["deliveries", storeCode, "unified", range?.from, range?.to],
+    queryFn: () => fetchUnifiedSearch(storeCode as string, range),
+    enabled: Boolean(storeCode) && Boolean(range?.from),
+  });
 
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-
-  const items = useMemo(() => {
-    void snapshot;
-    if (!storeCode || !range?.from) return [];
-
-    return listGroupsForStore(storeCode)
-      .filter((group) => isDateWithinRange(group.delivery.delivery_date, range))
-      .flatMap((group) =>
-        group.items.map((item) => ({ ...item, delivery_date: group.delivery.delivery_date })),
-      )
-      .sort(
-        (a, b) => b.delivery_date.localeCompare(a.delivery_date) || compareByItemCode(a, b),
-      );
-  }, [storeCode, range, snapshot]);
-
-  return { items };
+  return { items: data ?? [] };
 }

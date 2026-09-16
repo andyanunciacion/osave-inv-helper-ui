@@ -23,6 +23,7 @@ export interface UseDeliveryDraftResult {
   storeMismatch: boolean;
   stage: DraftStage;
   result: CreateDeliveryResult | null;
+  submitError: string | null;
   updateHeaderField: (field: keyof DraftHeader, value: string) => void;
   updateItemField: (localId: string, field: DraftItemField, value: string) => void;
   addItem: () => void;
@@ -62,6 +63,7 @@ export function useDeliveryDraft(
   const [items, setItems] = useState<DraftItem[]>(ocrResult.items);
   const [stage, setStage] = useState<DraftStage>("editing");
   const [result, setResult] = useState<CreateDeliveryResult | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const { submitDelivery } = useCreateDelivery();
 
   const storeMismatch = useMemo(() => {
@@ -105,6 +107,7 @@ export function useDeliveryDraft(
 
   const confirm = useCallback(() => {
     setStage("submitting");
+    setSubmitError(null);
 
     const input: NewDeliveryInput = {
       delivery_code: header.delivery_code.trim(),
@@ -124,8 +127,18 @@ export function useDeliveryDraft(
         })),
     };
 
-    setResult(submitDelivery(input));
-    setStage("submitted");
+    void submitDelivery(input)
+      .then((res) => {
+        setResult(res);
+        setStage("submitted");
+      })
+      .catch(() => {
+        // A network/server failure, distinct from a domain-level rejection
+        // (duplicate_delivery/partial, which resolve normally) — stay on
+        // the review screen with the typed rows intact, same as editAgain.
+        setSubmitError("Couldn't reach the server. Check your connection and try again.");
+        setStage("editing");
+      });
   }, [header, items, sessionStoreCode, submitDelivery]);
 
   // Lets the review screen return to editing after a duplicate_delivery
@@ -141,6 +154,7 @@ export function useDeliveryDraft(
     storeMismatch,
     stage,
     result,
+    submitError,
     updateHeaderField,
     updateItemField,
     addItem,
