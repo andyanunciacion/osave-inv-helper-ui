@@ -28,10 +28,11 @@ function ocrResult(overrides: Partial<OcrResult["header"]> = {}): OcrResult {
         localId: "a",
         item_code: "A1",
         item_name: "Item A",
+        unit_count: "12",
         quantity: "2",
         unit: "BOX",
         item_price: "10",
-        total_item_price: "20",
+        total_item_price: "240",
       },
     ],
   };
@@ -73,11 +74,94 @@ describe("useDeliveryDraft", () => {
     expect(result.current.storeMismatch).toBe(false);
   });
 
-  it("flags an item row whose printed total doesn't match quantity * price", () => {
+  it("blocks confirming a store mismatch, and sends nothing", () => {
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ receipt_store_code: "OTHER-STORE" }), "STORE1"),
+      { wrapper },
+    );
+    expect(result.current.canConfirm).toBe(false);
+
+    createDeliveryRequest.mockClear();
+    act(() => result.current.confirm());
+    expect(createDeliveryRequest).not.toHaveBeenCalled();
+    expect(result.current.stage).toBe("editing");
+  });
+
+  it("requires the receipt's store code — a blank one blocks confirming until it's typed", () => {
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ receipt_store_code: "" }), "STORE1"),
+      { wrapper },
+    );
+    expect(result.current.missingReceiptStoreCode).toBe(true);
+    expect(result.current.storeMismatch).toBe(false);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateHeaderField("receipt_store_code", "store1"));
+    expect(result.current.missingReceiptStoreCode).toBe(false);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("flags an item row whose printed total doesn't match quantity * unit_count * price", () => {
     const draft = ocrResult();
     draft.items[0].total_item_price = "999";
     const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
     expect(result.current.items[0].hasMismatch).toBe(true);
+  });
+
+  it("does not flag a row whose total matches quantity * unit_count * price", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+    expect(result.current.items[0].hasMismatch).toBe(false);
+  });
+
+  it("marks cells OCR couldn't read as blank, on rows that have other content", () => {
+    const draft = ocrResult();
+    draft.items[0].quantity = "";
+    draft.items[0].unit = "";
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    expect(result.current.items[0].blankFields).toEqual(["unit", "quantity"]);
+  });
+
+  it("doesn't mark a freshly added, untouched row as blank", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+    act(() => result.current.addItem());
+    expect(result.current.items[1].blankFields).toEqual([]);
+  });
+
+  it("blocks confirming while a row has numbers but no description, instead of dropping it", () => {
+    const draft = ocrResult();
+    draft.items.push({
+      localId: "b",
+      item_code: "",
+      item_name: "",
+      unit_count: "",
+      quantity: "",
+      unit: "",
+      item_price: "",
+      total_item_price: "627.72",
+    });
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    expect(result.current.unnamedRowCount).toBe(1);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateItemField("b", "item_name", "Baby Diaper Pants"));
+    expect(result.current.unnamedRowCount).toBe(0);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("sends unit_count, quantity and the required receipt_store_code on confirm", async () => {
+    createDeliveryRequest.mockClear();
+    createDeliveryRequest.mockResolvedValue(successResult());
+
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ receipt_store_code: " store1 " }), "STORE1"),
+      { wrapper },
+    );
+    act(() => result.current.confirm());
+
+    await waitFor(() => expect(createDeliveryRequest).toHaveBeenCalledTimes(1));
+    const sent = createDeliveryRequest.mock.calls[0][0];
+    expect(sent.receipt_store_code).toBe("store1");
+    expect(sent.items[0]).toMatchObject({ unit_count: 12, quantity: 2, unit: "BOX" });
   });
 
   it("writes the delivery on confirm and reports success", async () => {
@@ -110,6 +194,27 @@ describe("useDeliveryDraft", () => {
     act(() => result.current.confirm());
 
     await waitFor(() => expect(result.current.result?.status).toBe("duplicate_delivery"));
+  });
+
+  it("surfaces the backend's store_mismatch result and lets the user go back to editing", async () => {
+    createDeliveryRequest.mockResolvedValue({
+      status: "store_mismatch",
+      delivery: null,
+      acceptedItems: [],
+      rejectedItems: [],
+    } satisfies CreateDeliveryResult);
+
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ delivery_code: "INV-DRAFT-MISMATCH" }), "STORE1"),
+      { wrapper },
+    );
+
+    act(() => result.current.confirm());
+    await waitFor(() => expect(result.current.result?.status).toBe("store_mismatch"));
+
+    act(() => result.current.editAgain());
+    expect(result.current.stage).toBe("editing");
+    expect(result.current.items).toHaveLength(1);
   });
 
   it("surfaces a network failure as an error and returns to editing, keeping typed rows", async () => {

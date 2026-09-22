@@ -61,7 +61,7 @@ export function VirtualItemList<T extends DeliveryItem>({
                   {item.item_name}
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
-                  {formatQuantity(item.quantity, item.unit)}
+                  {formatQuantity(item.quantity, item.unit, item.unit_count)}
                   {renderMeta ? <> · {renderMeta(item)}</> : null}
                 </span>
               </div>

@@ -27,7 +27,8 @@ export interface DeliveryItem {
   store_code: string;
   item_code: string | null;
   item_name: string;
-  quantity: number | null;
+  unit_count: number | null; // receipt's "Unit/Box" — pieces per box
+  quantity: number | null; // receipt's "Qty"
   unit: ItemUnit | null;
   item_price: number | null;
   total_item_price: number | null;
