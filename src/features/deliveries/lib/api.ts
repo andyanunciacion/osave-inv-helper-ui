@@ -5,12 +5,15 @@
 
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
+import type { DeliveryItemUpdate } from "@/types/schema";
 import type {
   CreateDeliveryResult,
   DeliveryGroup,
   DeliverySearchResultGroup,
   NewDeliveryInput,
   UnifiedItemRow,
+  UpdateItemQuantityInput,
+  UpdateItemQuantityResult,
 } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -79,6 +82,35 @@ export async function fetchGroupedSearch(
     if (groups.length >= result.pagination.total || result.groups.length === 0) break;
   }
   return groups;
+}
+
+export async function updateItemQuantity(
+  deliveryCode: string,
+  itemId: string,
+  input: UpdateItemQuantityInput,
+): Promise<UpdateItemQuantityResult> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/deliveries/${encodeURIComponent(deliveryCode)}/items/${encodeURIComponent(itemId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to update item quantity (status ${res.status})`);
+  }
+  return res.json() as Promise<UpdateItemQuantityResult>;
+}
+
+export async function fetchItemHistory(
+  deliveryCode: string,
+  itemId: string,
+): Promise<DeliveryItemUpdate[]> {
+  const { history } = await apiFetch<{ history: DeliveryItemUpdate[] }>(
+    `/api/deliveries/${encodeURIComponent(deliveryCode)}/items/${encodeURIComponent(itemId)}/history`,
+  );
+  return history;
 }
 
 export async function fetchUnifiedSearch(
