@@ -3,7 +3,7 @@
 // AI_DOCS/main-file.md §4 needed on the client; `src/types/schema.ts` stays
 // the source of truth for the persisted row shapes.
 
-import type { Delivery, DeliveryItem, ItemUnit } from "@/types/schema";
+import type { Delivery, DeliveryItem, DeliveryItemUpdate, ItemUnit } from "@/types/schema";
 
 export interface DeliveryGroup {
   delivery: Delivery;
@@ -87,4 +87,16 @@ export interface CreateDeliveryResult {
   acceptedItems: DeliveryItem[];
   rejectedItems: RejectedItem[];
   mergedItems: MergedItem[];
+}
+
+// frontend-contract.md §8 — scoped to quantity only, matching the backend's
+// PATCH; item_code/item_name/unit/price stay immutable through this route.
+export interface UpdateItemQuantityInput {
+  quantity: number;
+  reason?: string | null;
+}
+
+export interface UpdateItemQuantityResult {
+  item: DeliveryItem;
+  update: DeliveryItemUpdate | null; // null when the submitted quantity matched the existing value
 }

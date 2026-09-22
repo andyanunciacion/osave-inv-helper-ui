@@ -35,3 +35,17 @@ export interface DeliveryItem {
   raw_ocr_text: string | null;
   created_at: string;
 }
+
+// One row per quantity correction made to a DeliveryItem after it was
+// confirmed (frontend-contract.md §8) — the audit trail behind
+// PATCH /api/deliveries/:delivery_code/items/:item_id.
+export interface DeliveryItemUpdate {
+  id: string;
+  item_id: string;
+  delivery_code: string;
+  store_code: string;
+  previous_quantity: number | null;
+  new_quantity: number;
+  reason: string | null;
+  created_at: string;
+}
