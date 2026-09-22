@@ -49,12 +49,29 @@ export interface NewDeliveryInput {
   items: NewDeliveryItemInput[];
 }
 
-// §5 rule 3: a duplicate item_code within the same delivery is rejected,
-// not merged — surfaced per-row rather than failing the whole batch.
+// §5 rule 3: a duplicate item_code against a row already saved on the
+// delivery (e.g. from an earlier page) is rejected — surfaced per-row
+// rather than failing the whole batch. A duplicate item_code *within the
+// same submitted batch* is a different case — see MergedItem below.
 export interface RejectedItem {
   item_code: string | null;
   item_name: string;
   reason: "duplicate_item_code";
+}
+
+// §5 rule 3: rows in the same submitted batch sharing an item_code (or the
+// name-based fallback key for code-less items) are combined by the backend
+// rather than rejected — the receipt itself sometimes prints the same item
+// twice on one page. quantity and total_item_price are summed; unit_count,
+// unit, item_price, and item_name are kept from the first occurrence.
+// `fieldsDisagreed` is true when those kept fields didn't match across the
+// merged rows — worth a second look, since it can mean the item code was
+// misread rather than genuinely repeated.
+export interface MergedItem {
+  item_code: string | null;
+  item_name: string;
+  mergedCount: number;
+  fieldsDisagreed: boolean;
 }
 
 // "duplicate_delivery": nothing was saved — the code belongs to another store,
@@ -69,4 +86,5 @@ export interface CreateDeliveryResult {
   delivery: Delivery | null; // null on "duplicate_delivery" and "store_mismatch"
   acceptedItems: DeliveryItem[];
   rejectedItems: RejectedItem[];
+  mergedItems: MergedItem[];
 }

@@ -53,6 +53,7 @@ function successResult(overrides: Partial<CreateDeliveryResult> = {}): CreateDel
     },
     acceptedItems: [],
     rejectedItems: [],
+    mergedItems: [],
     ...overrides,
   };
 }
@@ -184,6 +185,7 @@ describe("useDeliveryDraft", () => {
       delivery: null,
       acceptedItems: [],
       rejectedItems: [],
+      mergedItems: [],
     } satisfies CreateDeliveryResult);
 
     const { result } = renderHook(
@@ -202,6 +204,7 @@ describe("useDeliveryDraft", () => {
       delivery: null,
       acceptedItems: [],
       rejectedItems: [],
+      mergedItems: [],
     } satisfies CreateDeliveryResult);
 
     const { result } = renderHook(
