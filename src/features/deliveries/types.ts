@@ -31,6 +31,7 @@ export interface DeliverySearchResultGroup extends DeliveryGroup {
 export interface NewDeliveryItemInput {
   item_code: string | null;
   item_name: string;
+  unit_count: number | null;
   quantity: number | null;
   unit: ItemUnit | null;
   item_price: number | null;
@@ -42,7 +43,9 @@ export interface NewDeliveryInput {
   store_code: string;
   warehouse_code: string | null;
   delivery_date: string;
-  receipt_store_code: string | null;
+  // Required by the backend: it must match store_code or the save is refused
+  // (frontend-contract.md §2).
+  receipt_store_code: string;
   items: NewDeliveryItemInput[];
 }
 
@@ -54,11 +57,16 @@ export interface RejectedItem {
   reason: "duplicate_item_code";
 }
 
-export type CreateDeliveryStatus = "success" | "duplicate_delivery" | "partial";
+// "duplicate_delivery": nothing was saved — the code belongs to another store,
+// or this exact page was already uploaded. "store_mismatch": the receipt is
+// addressed to a different store than the session's; nothing was saved.
+// A later page of a receipt for the same store comes back as success/partial
+// (its items are appended to the existing delivery).
+export type CreateDeliveryStatus = "success" | "duplicate_delivery" | "partial" | "store_mismatch";
 
 export interface CreateDeliveryResult {
   status: CreateDeliveryStatus;
-  delivery: Delivery | null;
+  delivery: Delivery | null; // null on "duplicate_delivery" and "store_mismatch"
   acceptedItems: DeliveryItem[];
   rejectedItems: RejectedItem[];
 }

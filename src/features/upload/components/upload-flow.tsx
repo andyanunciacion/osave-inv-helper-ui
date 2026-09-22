@@ -8,17 +8,20 @@ import { CaptureStep } from "./capture-step";
 import { ResultStep } from "./result-step";
 import { ReviewStep } from "./review-step";
 
-// Orchestrates the §6 flow B stages: capture → (mock) processing → review →
+// Orchestrates the §6 flow B stages: capture → OCR processing → review →
 // result. Stage/data ownership lives in useOcrCapture + useDeliveryDraft —
-// this component only decides which step to render.
+// this component only decides which step to render. One photographed page
+// goes through the whole flow at a time; a multi-page receipt is uploaded
+// page by page and the backend appends each page to the same delivery.
 export function UploadFlow() {
   const { storeCode } = useStoreSession();
-  const { status, ocrResult, captureFile, reset } = useOcrCapture();
+  const { status, ocrResult, error, captureFile, reset } = useOcrCapture();
 
   if (!ocrResult) {
     return (
       <CaptureStep
         status={status}
+        error={error}
         onFileSelected={(file) => captureFile(file, storeCode ?? "")}
       />
     );

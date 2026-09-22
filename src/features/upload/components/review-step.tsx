@@ -20,6 +20,9 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
     header,
     items,
     storeMismatch,
+    missingReceiptStoreCode,
+    unnamedRowCount,
+    canConfirm,
     stage,
     submitError,
     updateHeaderField,
@@ -72,17 +75,24 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
           <Input
             id="receipt-store-code"
             value={header.receipt_store_code}
+            aria-invalid={missingReceiptStoreCode || storeMismatch}
             onChange={(event) => updateHeaderField("receipt_store_code", event.target.value)}
           />
+          {missingReceiptStoreCode ? (
+            <p className="text-xs text-destructive">
+              Required — type the store number printed after &quot;To:&quot; on the receipt.
+            </p>
+          ) : null}
         </div>
 
         {storeMismatch ? (
-          <Alert className="border-amber-500/50">
-            <AlertTriangle className="text-amber-600 dark:text-amber-400" />
-            <AlertTitle>Store mismatch</AlertTitle>
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertTitle>Wrong store</AlertTitle>
             <AlertDescription>
-              The receipt&apos;s store code doesn&apos;t match this session. You can still log
-              it here if that&apos;s intended.
+              This receipt is addressed to a different store than this session, so it
+              can&apos;t be saved here. If the code was misread, correct it above; otherwise
+              start over with the right receipt.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -96,6 +106,23 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
             Add item
           </Button>
         </div>
+        {items.some((item) => item.blankFields.length > 0) ? (
+          <p className="text-xs text-muted-foreground">
+            Fields outlined in red couldn&apos;t be read from the photo — fill them in from the
+            receipt.
+          </p>
+        ) : null}
+        {unnamedRowCount > 0 ? (
+          <Alert className="border-amber-500/50">
+            <AlertTriangle className="text-amber-600 dark:text-amber-400" />
+            <AlertTitle>
+              {unnamedRowCount} row{unnamedRowCount === 1 ? "" : "s"} missing a description
+            </AlertTitle>
+            <AlertDescription>
+              Add the item name from the receipt, or remove the row, before confirming.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex flex-col gap-3">
           {items.map((item) => (
             <ItemRowEditor
@@ -130,7 +157,7 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
           type="button"
           className="flex-1"
           onClick={confirm}
-          disabled={isSubmitting || items.length === 0}
+          disabled={isSubmitting || !canConfirm}
         >
           {isSubmitting ? "Confirming…" : "Confirm delivery"}
         </Button>

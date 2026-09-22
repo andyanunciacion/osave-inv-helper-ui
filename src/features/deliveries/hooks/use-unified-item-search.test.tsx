@@ -20,6 +20,7 @@ function item(overrides: Partial<UnifiedItemRow> = {}): UnifiedItemRow {
     store_code: "STORE1",
     item_code: "A1",
     item_name: "Widget",
+    unit_count: 12,
     quantity: 1,
     unit: "BOX",
     item_price: 1,

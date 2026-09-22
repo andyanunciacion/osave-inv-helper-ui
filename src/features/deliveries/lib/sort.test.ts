@@ -9,6 +9,7 @@ function item(item_code: string | null): DeliveryItem {
     store_code: "STORE1",
     item_code,
     item_name: "Item",
+    unit_count: 12,
     quantity: 1,
     unit: "BOX",
     item_price: 1,

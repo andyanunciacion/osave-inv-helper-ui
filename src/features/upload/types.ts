@@ -10,7 +10,8 @@ export interface DraftItem {
   localId: string;
   item_code: string;
   item_name: string;
-  quantity: string;
+  unit_count: string; // "Unit/Box"
+  quantity: string; // "Qty"
   unit: string;
   item_price: string;
   total_item_price: string;

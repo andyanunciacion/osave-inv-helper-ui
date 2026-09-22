@@ -1,19 +1,21 @@
 "use client";
 
 import { useRef } from "react";
-import { Camera, Loader2 } from "lucide-react";
+import { AlertTriangle, Camera, Loader2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { CaptureStatus } from "../hooks/use-ocr-capture";
+import type { CaptureError, CaptureStatus } from "../hooks/use-ocr-capture";
 
 interface CaptureStepProps {
   status: CaptureStatus;
+  error: CaptureError | null;
   onFileSelected: (file: File) => void;
 }
 
 // Thin: the file-input ref/click is a DOM-only concern, not business logic.
 // §2: <input capture="environment"> is the recommended cross-browser way to
 // get a photo (camera or gallery) without a custom getUserMedia UI.
-export function CaptureStep({ status, onFileSelected }: CaptureStepProps) {
+export function CaptureStep({ status, error, onFileSelected }: CaptureStepProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   if (status === "processing") {
@@ -36,10 +38,18 @@ export function CaptureStep({ status, onFileSelected }: CaptureStepProps) {
           The header and item table will be read automatically.
         </p>
       </div>
-      {status === "error" ? (
-        <p className="text-xs text-destructive">
-          Couldn&apos;t read that receipt. Try again.
-        </p>
+      {status === "error" && error ? (
+        <Alert variant="destructive" className="text-left">
+          <AlertTriangle />
+          <AlertTitle>
+            {error.kind === "store_mismatch" ? "Wrong store" : "Couldn't read that receipt"}
+          </AlertTitle>
+          <AlertDescription>
+            {error.kind === "store_mismatch"
+              ? `${error.message}. Check you're signed in to the right store, or pick the right receipt.`
+              : error.message}
+          </AlertDescription>
+        </Alert>
       ) : null}
       <input
         ref={inputRef}

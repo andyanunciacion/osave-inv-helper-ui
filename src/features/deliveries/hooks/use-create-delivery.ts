@@ -15,7 +15,8 @@ export function useCreateDelivery(): UseCreateDeliveryResult {
   const { mutateAsync } = useMutation({
     mutationFn: createDeliveryRequest,
     onSuccess: (result, input) => {
-      if (result.status === "duplicate_delivery") return;
+      // Nothing was written in either case, so there's nothing to refresh.
+      if (result.status === "duplicate_delivery" || result.status === "store_mismatch") return;
       // Recent uploads / search results may already be on screen (e.g. via
       // the recent-uploads bar) — invalidate rather than trying to patch
       // every cached list by hand.
