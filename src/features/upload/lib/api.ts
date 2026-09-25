@@ -3,6 +3,7 @@
 // resolves — only the parsed OcrResult comes back.
 
 import type { DraftHeader, DraftItem } from "../types";
+import { normalizeImageFile } from "./normalize-image-file";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -40,7 +41,7 @@ interface OcrErrorBody {
 // store 2's records.
 export async function runOcr(file: File, storeCode: string): Promise<OcrApiResponse> {
   const formData = new FormData();
-  formData.append("image", file);
+  formData.append("image", normalizeImageFile(file));
   formData.append("store_code", storeCode);
 
   const res = await fetch(`${API_BASE_URL}/api/ocr`, {

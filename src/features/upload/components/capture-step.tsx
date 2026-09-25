@@ -6,6 +6,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { CaptureError, CaptureStatus } from "../hooks/use-ocr-capture";
 
+// `.jfif` is listed explicitly: Chrome on Windows doesn't treat it as an
+// image, so `image/*` alone can leave Messenger-saved receipts out of the
+// picker (normalizeImageFile fixes the type once one is picked).
+const IMAGE_ACCEPT = "image/*,.jfif";
+
 interface CaptureStepProps {
   status: CaptureStatus;
   error: CaptureError | null;
@@ -60,7 +65,7 @@ export function CaptureStep({ status, error, onFilesSelected }: CaptureStepProps
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept={IMAGE_ACCEPT}
         capture="environment"
         hidden
         onChange={(event) => {
@@ -72,7 +77,7 @@ export function CaptureStep({ status, error, onFilesSelected }: CaptureStepProps
       <input
         ref={galleryInputRef}
         type="file"
-        accept="image/*"
+        accept={IMAGE_ACCEPT}
         multiple
         hidden
         onChange={(event) => {
