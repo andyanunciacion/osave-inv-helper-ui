@@ -9,7 +9,12 @@ import type { CreateDeliveryResult, MergedItem } from "@/features/deliveries/typ
 interface ResultStepProps {
   result: CreateDeliveryResult;
   onEditAgain: () => void;
-  onUploadAnother: () => void;
+  // Label/handler for the primary action after a successful/partial save —
+  // "Upload another page" to start a fresh capture, or "Continue to next
+  // page" to advance the queue when this was one page of a multi-photo
+  // batch (upload-flow.tsx decides which).
+  continueLabel: string;
+  onContinue: () => void;
 }
 
 // The receipt printed the same item twice on this page and the backend
@@ -59,7 +64,7 @@ function MergedItemsNotice({ items }: { items: MergedItem[] }) {
 // Thin: renders the outcome of useDeliveryDraft's confirm() — §6 flow B
 // step 5 calls for duplicates to be surfaced clearly, not as a silent
 // failure, whether it's the whole receipt or individual item rows.
-export function ResultStep({ result, onEditAgain, onUploadAnother }: ResultStepProps) {
+export function ResultStep({ result, onEditAgain, continueLabel, onContinue }: ResultStepProps) {
   if (result.status === "store_mismatch") {
     return (
       <div className="flex flex-col items-center gap-4 py-6 text-center">
@@ -140,8 +145,8 @@ export function ResultStep({ result, onEditAgain, onUploadAnother }: ResultStepP
         >
           Back to search
         </Button>
-        <Button type="button" onClick={onUploadAnother}>
-          Upload another page
+        <Button type="button" onClick={onContinue}>
+          {continueLabel}
         </Button>
       </div>
     </div>

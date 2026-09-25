@@ -22,6 +22,10 @@ export interface DraftHeader {
   warehouse_code: string;
   delivery_date: string;
   receipt_store_code: string;
+  // "yyyy-MM-ddTHH:mm:ss", the printed "Date and hour of printout" — not
+  // shown on the review screen; kept only to send back to
+  // /api/ocr/reconcile for a multi-photo upload.
+  printout_datetime: string;
 }
 
 export interface OcrResult {
