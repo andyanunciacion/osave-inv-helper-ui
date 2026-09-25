@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle, Plus, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,11 +12,18 @@ import { ItemRowEditor } from "./item-row-editor";
 interface ReviewStepProps {
   draft: UseDeliveryDraftResult;
   onCancel: () => void;
+  // Set on a multi-photo upload; null for a single photo, where there's
+  // nothing to number.
+  pageLabel?: string | null;
+  // True when this page's receipt_store_code was blank in the photo and
+  // came from /api/ocr/reconcile instead of being read directly — worth a
+  // glance since it's a guess based on a sibling page, not an OCR read.
+  receiptStoreCodeInferred?: boolean;
 }
 
 // Thin: renders the draft header + item rows. All editing/validation logic
 // (mismatch flags, store-mismatch check, confirm) lives in useDeliveryDraft.
-export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
+export function ReviewStep({ draft, onCancel, pageLabel, receiptStoreCodeInferred }: ReviewStepProps) {
   const {
     header,
     items,
@@ -35,6 +43,11 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
 
   return (
     <div className="flex flex-col gap-5">
+      {pageLabel ? (
+        <Badge variant="secondary" className="w-fit">
+          {pageLabel}
+        </Badge>
+      ) : null}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="delivery-code" className="text-sm font-semibold">
@@ -81,6 +94,12 @@ export function ReviewStep({ draft, onCancel }: ReviewStepProps) {
           {missingReceiptStoreCode ? (
             <p className="text-xs text-destructive">
               Required — type the store number printed after &quot;To:&quot; on the receipt.
+            </p>
+          ) : receiptStoreCodeInferred ? (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Sparkles className="size-3" aria-hidden="true" />
+              Couldn&apos;t be read on this photo — filled in from another page in this batch.
+              Double-check it.
             </p>
           ) : null}
         </div>

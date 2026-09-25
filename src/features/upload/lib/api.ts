@@ -59,3 +59,31 @@ export async function runOcr(file: File, storeCode: string): Promise<OcrApiRespo
 
   return res.json() as Promise<OcrApiResponse>;
 }
+
+export interface OcrReconcilePage extends DraftHeader {
+  receipt_store_code_inferred: boolean;
+  store_mismatch: boolean;
+}
+
+// Called once per multi-photo upload, after every page's runOcr() has
+// resolved — never per page, since it needs every sibling present to find a
+// match (frontend-contract.md §6). A single-photo upload has no siblings to
+// check against, so callers skip this entirely for a batch of one.
+export async function runOcrReconcile(
+  storeCode: string,
+  pages: DraftHeader[],
+): Promise<OcrReconcilePage[]> {
+  const res = await fetch(`${API_BASE_URL}/api/ocr/reconcile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ store_code: storeCode, pages }),
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as OcrErrorBody;
+    throw new OcrError(body.error ?? "reconcile_failed", body.message ?? `Reconcile request failed (status ${res.status})`);
+  }
+
+  const data = (await res.json()) as { pages: OcrReconcilePage[] };
+  return data.pages;
+}

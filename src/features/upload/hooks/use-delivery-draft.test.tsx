@@ -21,6 +21,7 @@ function ocrResult(overrides: Partial<OcrResult["header"]> = {}): OcrResult {
       warehouse_code: "WH-NORTH",
       delivery_date: "2026-09-01",
       receipt_store_code: "STORE1",
+      printout_datetime: "2026-09-01T10:00:00",
       ...overrides,
     },
     items: [
