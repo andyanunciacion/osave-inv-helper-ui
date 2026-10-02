@@ -1,13 +1,28 @@
 "use client";
 
-import { AlertTriangle, Plus, Sparkles } from "lucide-react";
+import { AlertTriangle, CircleCheck, Plus, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatCurrency } from "@/features/deliveries/lib/format";
 import type { UseDeliveryDraftResult } from "../hooks/use-delivery-draft";
+import type { TotalsMismatch } from "../lib/receipt-totals";
 import { ItemRowEditor } from "./item-row-editor";
+
+function describeMismatch({ kind, printed, counted }: TotalsMismatch): string {
+  switch (kind) {
+    case "item_count":
+      return `The receipt lists ${printed} items, but there are ${counted} here — a row may be missing.`;
+    case "total_box":
+      return `Total Box on the receipt is ${printed}; the BOX rows' Qty add up to ${counted}.`;
+    case "total_pcs":
+      return `Total Pcs on the receipt is ${printed}; the PIECE rows' Qty add up to ${counted}.`;
+    case "total_value":
+      return `Total Value on the receipt is ${formatCurrency(printed)}; the rows add up to ${formatCurrency(counted)}.`;
+  }
+}
 
 interface ReviewStepProps {
   draft: UseDeliveryDraftResult;
@@ -30,6 +45,7 @@ export function ReviewStep({ draft, onCancel, pageLabel, receiptStoreCodeInferre
     storeMismatch,
     missingReceiptStoreCode,
     unnamedRowCount,
+    totalsCheck,
     canConfirm,
     stage,
     submitError,
@@ -141,6 +157,24 @@ export function ReviewStep({ draft, onCancel, pageLabel, receiptStoreCodeInferre
               Add the item name from the receipt, or remove the row, before confirming.
             </AlertDescription>
           </Alert>
+        ) : null}
+        {totalsCheck.mismatches.length > 0 ? (
+          <Alert className="border-amber-500/50">
+            <AlertTriangle className="text-amber-600 dark:text-amber-400" />
+            <AlertTitle>Doesn&apos;t match the receipt&apos;s printed totals</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc pl-4">
+                {totalsCheck.mismatches.map((mismatch) => (
+                  <li key={mismatch.kind}>{describeMismatch(mismatch)}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        ) : totalsCheck.checked > 0 ? (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <CircleCheck className="size-3" aria-hidden="true" />
+            Matches the totals printed on the receipt.
+          </p>
         ) : null}
         <div className="flex flex-col gap-3">
           {items.map((item) => (

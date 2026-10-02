@@ -6,6 +6,12 @@
 
 export type UploadStage = "capture" | "processing" | "review" | "submitting" | "result";
 
+// Cells /api/ocr worked out instead of reading them — mostly Qty/UOM that
+// staff struck through while checking the delivery, recovered from the row's
+// printed Total = Qty × Unit/Box × Price or the store's item history
+// (frontend-contract.md §6).
+export type InferredField = "unit_count" | "unit" | "quantity" | "item_price" | "total_item_price";
+
 export interface DraftItem {
   localId: string;
   item_code: string;
@@ -15,6 +21,22 @@ export interface DraftItem {
   unit: string;
   item_price: string;
   total_item_price: string;
+  // Shown as "calculated" on the review screen; a cell leaves this list once
+  // the user edits it.
+  inferred: InferredField[];
+  // Handwriting on the row (a note, or a handwritten count) — quantity is the
+  // printed one, so staff should check it against what actually arrived.
+  has_annotation: boolean;
+}
+
+// The page's printed "Total Pcs / Total Box / Total Item/s / Total Value"
+// block, "" where it wasn't read. Compared against the edited rows to catch a
+// missed row or a misread cell (lib/receipt-totals.ts).
+export interface ReceiptTotals {
+  total_pcs: string;
+  total_box: string;
+  total_items: string;
+  total_value: string;
 }
 
 export interface DraftHeader {
@@ -31,4 +53,5 @@ export interface DraftHeader {
 export interface OcrResult {
   header: DraftHeader;
   items: DraftItem[];
+  totals: ReceiptTotals;
 }

@@ -58,6 +58,35 @@ describe("useOcrCapture", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("passes through calculated cells, handwriting flags and the printed totals", async () => {
+    const response = ocrApiResponse();
+    runOcr.mockResolvedValue({
+      ...response,
+      items: [{ ...response.items[0], quantity: "1", inferred: ["quantity"], has_annotation: true }],
+      totals: { total_pcs: "", total_box: "8", total_items: "8", total_value: "9576.72" },
+    });
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file()], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    const ocr = result.current.currentPage!.ocrResult;
+    expect(ocr.items[0]).toMatchObject({ inferred: ["quantity"], has_annotation: true });
+    expect(ocr.totals.total_box).toBe("8");
+  });
+
+  it("defaults the new fields when talking to a backend that predates them", async () => {
+    runOcr.mockResolvedValue(ocrApiResponse());
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file()], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    const ocr = result.current.currentPage!.ocrResult;
+    expect(ocr.items[0]).toMatchObject({ inferred: [], has_annotation: false });
+    expect(ocr.totals).toEqual({ total_pcs: "", total_box: "", total_items: "", total_value: "" });
+  });
+
   it("skips reconcile for a single-photo capture", async () => {
     runOcr.mockResolvedValue(ocrApiResponse());
 

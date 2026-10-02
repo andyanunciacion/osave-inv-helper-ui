@@ -46,10 +46,20 @@ const GENERIC_ERROR: CaptureError = {
   message: "Couldn't read that receipt. Try again.",
 };
 
+const NO_TOTALS = { total_pcs: "", total_box: "", total_items: "", total_value: "" };
+
+// The `??` defaults keep the review screen working against a backend that
+// predates inferred cells / printed totals.
 function withLocalIds(result: OcrApiResponse): OcrResult {
   return {
     ...result,
-    items: result.items.map((item) => ({ ...item, localId: crypto.randomUUID() })),
+    totals: result.totals ?? NO_TOTALS,
+    items: result.items.map((item) => ({
+      ...item,
+      inferred: item.inferred ?? [],
+      has_annotation: item.has_annotation ?? false,
+      localId: crypto.randomUUID(),
+    })),
   };
 }
 

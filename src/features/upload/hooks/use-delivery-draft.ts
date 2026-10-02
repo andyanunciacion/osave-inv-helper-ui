@@ -3,6 +3,7 @@ import { useCreateDelivery } from "@/features/deliveries/hooks/use-create-delive
 import { hasPriceMismatch } from "@/features/deliveries/lib/format";
 import type { CreateDeliveryResult, NewDeliveryInput } from "@/features/deliveries/types";
 import type { ItemUnit } from "@/types/schema";
+import { checkReceiptTotals, type TotalsCheck } from "../lib/receipt-totals";
 import type { DraftHeader, DraftItem, OcrResult } from "../types";
 
 // §6 flow B step 4-5: the review/edit screen's state. Seeded from the OCR
@@ -11,7 +12,15 @@ import type { DraftHeader, DraftItem, OcrResult } from "../types";
 // the confirm → write step against features/deliveries.
 export type DraftStage = "editing" | "submitting" | "submitted";
 
-export type DraftItemField = keyof Omit<DraftItem, "localId">;
+// The editable (string) cells of a row — not its OCR metadata.
+export type DraftItemField =
+  | "item_code"
+  | "item_name"
+  | "unit_count"
+  | "quantity"
+  | "unit"
+  | "item_price"
+  | "total_item_price";
 
 export interface DraftItemView extends DraftItem {
   hasMismatch: boolean;
@@ -34,6 +43,9 @@ export interface UseDeliveryDraftResult {
   // Rows with numbers/code but no description. Dropping them silently would
   // lose data, so they block saving until named or removed.
   unnamedRowCount: number;
+  // The rows compared against the receipt's printed totals block — a
+  // warning (a row may be missing, or a quantity misread), not a block.
+  totalsCheck: TotalsCheck;
   canConfirm: boolean;
   stage: DraftStage;
   result: CreateDeliveryResult | null;
@@ -65,6 +77,8 @@ function emptyItem(): DraftItem {
     unit: "PIECE",
     item_price: "",
     total_item_price: "",
+    inferred: [],
+    has_annotation: false,
   };
 }
 
@@ -131,6 +145,8 @@ export function useDeliveryDraft(
     [itemViews],
   );
 
+  const totalsCheck = useMemo(() => checkReceiptTotals(ocrResult.totals, items), [ocrResult.totals, items]);
+
   const canConfirm =
     !storeMismatch && !missingReceiptStoreCode && unnamedRowCount === 0 && items.length > 0;
 
@@ -138,10 +154,15 @@ export function useDeliveryDraft(
     setHeader((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  // A cell the user typed is no longer "calculated".
   const updateItemField = useCallback(
     (localId: string, field: DraftItemField, value: string) => {
       setItems((prev) =>
-        prev.map((item) => (item.localId === localId ? { ...item, [field]: value } : item)),
+        prev.map((item) =>
+          item.localId === localId
+            ? { ...item, [field]: value, inferred: item.inferred.filter((f) => f !== field) }
+            : item,
+        ),
       );
     },
     [],
@@ -210,6 +231,7 @@ export function useDeliveryDraft(
     storeMismatch,
     missingReceiptStoreCode,
     unnamedRowCount,
+    totalsCheck,
     canConfirm,
     stage,
     result,
