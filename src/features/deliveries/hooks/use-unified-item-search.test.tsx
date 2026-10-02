@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { UnifiedItemRow } from "../types";
@@ -54,6 +54,25 @@ describe("useUnifiedItemSearch", () => {
     });
 
     await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.status).toBe("success");
     expect(fetchUnifiedSearch).toHaveBeenCalledWith("STORE1", range);
+  });
+
+  it("reports loading while in flight and an error on failure, then retries", async () => {
+    const range = { from: new Date(2026, 1, 1), to: new Date(2026, 1, 1) };
+    fetchUnifiedSearch.mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderHook(() => useUnifiedItemSearch({ storeCode: "STORE1", range }), {
+      wrapper,
+    });
+
+    expect(result.current.status).toBe("loading");
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.items).toHaveLength(0);
+
+    fetchUnifiedSearch.mockResolvedValueOnce([item()]);
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(result.current.status).toBe("success");
   });
 });

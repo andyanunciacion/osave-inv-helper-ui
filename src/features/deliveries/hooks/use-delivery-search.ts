@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
 import { fetchGroupedSearch } from "../lib/api";
+import { toQueryStatus, type QueryStatus } from "../lib/query-status";
 import type { DeliverySearchResultGroup } from "../types";
 
 // §6 flow C: free-text query matched against item_code/item_name/
@@ -16,6 +17,10 @@ export interface UseDeliverySearchParams {
 export interface UseDeliverySearchResult {
   groups: DeliverySearchResultGroup[];
   hasActiveFilters: boolean;
+  // Lets the results screen tell "still searching" / "couldn't reach the
+  // server" apart from a genuine "no deliveries found".
+  status: QueryStatus;
+  retry: () => void;
 }
 
 export function useDeliverySearch({
@@ -26,11 +31,16 @@ export function useDeliverySearch({
   const trimmedQuery = query.trim();
   const hasActiveFilters = Boolean(trimmedQuery) || Boolean(range?.from);
 
-  const { data } = useQuery({
+  const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ["deliveries", storeCode, "search", trimmedQuery, range?.from, range?.to],
     queryFn: () => fetchGroupedSearch(storeCode as string, trimmedQuery, range),
     enabled: Boolean(storeCode) && Boolean(trimmedQuery),
   });
 
-  return { groups: data ?? [], hasActiveFilters };
+  return {
+    groups: data ?? [],
+    hasActiveFilters,
+    status: toQueryStatus({ data, isError, isLoading }),
+    retry: () => void refetch(),
+  };
 }
