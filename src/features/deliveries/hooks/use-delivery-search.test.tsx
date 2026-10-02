@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { DeliverySearchResultGroup } from "../types";
@@ -43,7 +43,39 @@ describe("useDeliverySearch", () => {
 
     expect(result.current.hasActiveFilters).toBe(false);
     expect(result.current.groups).toHaveLength(0);
+    expect(result.current.status).toBe("idle");
     expect(fetchGroupedSearch).not.toHaveBeenCalled();
+  });
+
+  it("reports loading, not an empty result, while the search is in flight", async () => {
+    let resolve: (groups: DeliverySearchResultGroup[]) => void = () => {};
+    fetchGroupedSearch.mockReturnValue(new Promise((r) => (resolve = r)));
+
+    const { result } = renderHook(
+      () => useDeliverySearch({ storeCode: "STORE1", query: "cola", range: undefined }),
+      { wrapper },
+    );
+
+    expect(result.current.status).toBe("loading");
+    act(() => resolve([]));
+    await waitFor(() => expect(result.current.status).toBe("success"));
+    expect(result.current.groups).toHaveLength(0);
+  });
+
+  it("reports a failed search as an error, and retry fetches again", async () => {
+    fetchGroupedSearch.mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderHook(
+      () => useDeliverySearch({ storeCode: "STORE1", query: "cola", range: undefined }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.status).toBe("error"));
+
+    fetchGroupedSearch.mockResolvedValueOnce([group()]);
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.status).toBe("success"));
+    expect(result.current.groups).toHaveLength(1);
   });
 
   it("fetches grouped results for a text query and reports hasActiveFilters", async () => {

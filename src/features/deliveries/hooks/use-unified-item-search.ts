@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
 import { fetchUnifiedSearch } from "../lib/api";
+import { toQueryStatus, type QueryStatus } from "../lib/query-status";
 import type { UnifiedItemRow } from "../types";
 
 // Backs the date-only search results view: when staff filter by date alone
@@ -15,17 +16,24 @@ export interface UseUnifiedItemSearchParams {
 
 export interface UseUnifiedItemSearchResult {
   items: UnifiedItemRow[];
+  // See useDeliverySearch — loading/failed must not read as "no items".
+  status: QueryStatus;
+  retry: () => void;
 }
 
 export function useUnifiedItemSearch({
   storeCode,
   range,
 }: UseUnifiedItemSearchParams): UseUnifiedItemSearchResult {
-  const { data } = useQuery({
+  const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ["deliveries", storeCode, "unified", range?.from, range?.to],
     queryFn: () => fetchUnifiedSearch(storeCode as string, range),
     enabled: Boolean(storeCode) && Boolean(range?.from),
   });
 
-  return { items: data ?? [] };
+  return {
+    items: data ?? [],
+    status: toQueryStatus({ data, isError, isLoading }),
+    retry: () => void refetch(),
+  };
 }

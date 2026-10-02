@@ -4,6 +4,7 @@ import { useDeliverySearch } from "@/features/deliveries/hooks/use-delivery-sear
 import { useUnifiedItemSearch } from "@/features/deliveries/hooks/use-unified-item-search";
 import { useStoreSession } from "@/features/store-session/hooks/use-store-session";
 import { useResultsFilters } from "../hooks/use-results-filters";
+import { ResultsStatus } from "./results-status";
 import { SearchResults } from "./search-results";
 import { UnifiedResults } from "./unified-results";
 
@@ -19,15 +20,20 @@ export function SearchResultsPage() {
   const { query, range } = useResultsFilters();
   const isDateOnly = Boolean(range?.from) && !query.trim();
 
-  const { groups } = useDeliverySearch({
+  const grouped = useDeliverySearch({
     storeCode,
     query,
     range: isDateOnly ? undefined : range,
   });
-  const { items } = useUnifiedItemSearch({
+  const unified = useUnifiedItemSearch({
     storeCode,
     range: isDateOnly ? range : undefined,
   });
 
-  return isDateOnly ? <UnifiedResults items={items} /> : <SearchResults groups={groups} />;
+  const { status, retry } = isDateOnly ? unified : grouped;
+  if (status === "loading" || status === "error") {
+    return <ResultsStatus status={status} onRetry={retry} />;
+  }
+
+  return isDateOnly ? <UnifiedResults items={unified.items} /> : <SearchResults groups={grouped.groups} />;
 }
