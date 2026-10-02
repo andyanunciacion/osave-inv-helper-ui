@@ -34,8 +34,11 @@ function ocrResult(overrides: Partial<OcrResult["header"]> = {}): OcrResult {
         unit: "BOX",
         item_price: "10",
         total_item_price: "240",
+        inferred: [],
+        has_annotation: false,
       },
     ],
+    totals: { total_pcs: "", total_box: "", total_items: "", total_value: "" },
   };
 }
 
@@ -140,6 +143,8 @@ describe("useDeliveryDraft", () => {
       unit: "",
       item_price: "",
       total_item_price: "627.72",
+      inferred: [],
+      has_annotation: false,
     });
     const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
     expect(result.current.unnamedRowCount).toBe(1);
@@ -235,6 +240,27 @@ describe("useDeliveryDraft", () => {
     expect(result.current.stage).toBe("editing");
     expect(result.current.result).toBeNull();
     expect(result.current.items).toHaveLength(1);
+  });
+
+  it("stops marking a calculated cell as calculated once the user edits it", () => {
+    const draft = ocrResult();
+    draft.items[0].inferred = ["quantity", "unit"];
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+
+    act(() => result.current.updateItemField("a", "quantity", "3"));
+    expect(result.current.items[0].inferred).toEqual(["unit"]);
+  });
+
+  it("checks the rows against the receipt's printed totals as they're edited", () => {
+    const draft = ocrResult();
+    draft.totals = { total_pcs: "", total_box: "2", total_items: "1", total_value: "240.00" };
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    expect(result.current.totalsCheck).toEqual({ mismatches: [], checked: 3 });
+
+    act(() => result.current.updateItemField("a", "quantity", "3"));
+    expect(result.current.totalsCheck.mismatches).toEqual([{ kind: "total_box", printed: 2, counted: 3 }]);
+    // A warning only — it doesn't stop the user confirming.
+    expect(result.current.canConfirm).toBe(true);
   });
 
   it("adds and removes item rows", () => {

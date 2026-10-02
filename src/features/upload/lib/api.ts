@@ -2,7 +2,7 @@
 // multipart form data and never touches this client again once the request
 // resolves — only the parsed OcrResult comes back.
 
-import type { DraftHeader, DraftItem } from "../types";
+import type { DraftHeader, DraftItem, ReceiptTotals } from "../types";
 import { normalizeImageFile } from "./normalize-image-file";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -12,6 +12,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 export interface OcrApiResponse {
   header: DraftHeader;
   items: Array<Omit<DraftItem, "localId">>;
+  totals: ReceiptTotals;
 }
 
 // A non-2xx answer from /api/ocr. `code` is the backend's `error` field
