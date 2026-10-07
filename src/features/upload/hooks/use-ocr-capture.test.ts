@@ -166,7 +166,7 @@ describe("useOcrCapture", () => {
     expect(result.current.pages[1].ocrResult.header.receipt_store_code).toBe("245");
   });
 
-  it("names the failed file when one of several fails, and never calls reconcile", async () => {
+  it("pauses on `partial` when some photos fail, keeping the ones that were read", async () => {
     runOcr
       .mockResolvedValueOnce(ocrApiResponse())
       .mockRejectedValueOnce(new OcrError("ocr_failed", "Couldn't read that receipt"));
@@ -174,10 +174,102 @@ describe("useOcrCapture", () => {
     const { result } = renderHook(() => useOcrCapture());
     act(() => result.current.captureFiles([file("good.jpg"), file("bad.jpg")], "245"));
 
-    await waitFor(() => expect(result.current.status).toBe("error"));
-    expect(result.current.error?.fileName).toBe("bad.jpg");
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+    expect(result.current.batchSize).toBe(2);
+    expect(result.current.readCount).toBe(1);
+    expect(result.current.failedPhotos).toEqual([
+      { fileName: "bad.jpg", error: expect.objectContaining({ kind: "failed" }), retryable: true },
+    ]);
     expect(runOcrReconcile).not.toHaveBeenCalled();
     expect(result.current.pages).toHaveLength(0);
+  });
+
+  it("retries only the failed photos, then reconciles the whole batch in pick order", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockRejectedValueOnce(new OcrError("ocr_failed", "Couldn't read that receipt"));
+    runOcrReconcile.mockResolvedValue([
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, store_mismatch: false },
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, store_mismatch: false },
+    ]);
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("good.jpg"), file("bad.jpg")], "245"));
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+
+    runOcr.mockResolvedValueOnce(ocrApiResponse({ printout_datetime: "2026-08-17T11:15:31" }));
+    act(() => result.current.retryFailed());
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(runOcr).toHaveBeenCalledTimes(3);
+    expect((runOcr.mock.calls[2][0] as File).name).toBe("bad.jpg");
+    const sentHeaders = runOcrReconcile.mock.calls[0][1];
+    expect(sentHeaders.map((h: { printout_datetime: string }) => h.printout_datetime)).toEqual([
+      "2026-08-17T11:15:30",
+      "2026-08-17T11:15:31",
+    ]);
+    expect(result.current.pages).toHaveLength(2);
+    expect(result.current.failedPhotos).toEqual([]);
+  });
+
+  it("continues with just the photos that were read", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockRejectedValueOnce(new OcrError("ocr_failed", "Couldn't read that receipt"));
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("good.jpg"), file("bad.jpg")], "245"));
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+
+    act(() => result.current.continueWithRead());
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.pages).toHaveLength(1);
+    // A single remaining page has nothing to reconcile against.
+    expect(runOcrReconcile).not.toHaveBeenCalled();
+  });
+
+  it("doesn't retry a wrong-store photo — it would read the same again", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockRejectedValueOnce(new OcrError("store_mismatch", "This receipt is addressed to store 301, not store 245", "301"));
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("good.jpg"), file("other-store.jpg")], "245"));
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+
+    expect(result.current.failedPhotos[0]).toMatchObject({ fileName: "other-store.jpg", retryable: false });
+    act(() => result.current.retryFailed());
+    expect(runOcr).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe("partial");
+  });
+
+  it("is an error naming the first failed file when no photo in the batch was read", async () => {
+    runOcr
+      .mockRejectedValueOnce(new OcrError("ocr_failed", "Couldn't read that receipt"))
+      .mockRejectedValueOnce(new OcrError("ocr_failed", "Couldn't read that receipt"));
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("a.jpg"), file("b.jpg")], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.error?.fileName).toBe("a.jpg");
+    expect(runOcrReconcile).not.toHaveBeenCalled();
+  });
+
+  it("forgets the failed photos on reset", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockRejectedValueOnce(new OcrError("ocr_failed", "Couldn't read that receipt"));
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("good.jpg"), file("bad.jpg")], "245"));
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+
+    act(() => result.current.reset());
+    expect(result.current.status).toBe("idle");
+    expect(result.current.failedPhotos).toEqual([]);
+    expect(result.current.batchSize).toBe(0);
   });
 
   it("advances to the next page and reports isLastPage correctly", async () => {

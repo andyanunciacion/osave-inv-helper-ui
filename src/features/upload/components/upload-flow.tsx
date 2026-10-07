@@ -8,6 +8,7 @@ import { useOcrCapture } from "../hooks/use-ocr-capture";
 import type { OcrResult } from "../types";
 import { BatchSummaryStep, type SavedPage } from "./batch-summary-step";
 import { CaptureStep } from "./capture-step";
+import { PartialBatchStep } from "./partial-batch-step";
 import { ResultStep } from "./result-step";
 import { ReviewStep } from "./review-step";
 
@@ -20,8 +21,9 @@ import { ReviewStep } from "./review-step";
 // confirm; the backend still appends each page to the same delivery.
 export function UploadFlow() {
   const { storeCode } = useStoreSession();
+  const capture = useOcrCapture();
   const { status, error, pages, currentIndex, currentPage, isLastPage, captureFiles, advance, reset } =
-    useOcrCapture();
+    capture;
   const [savedPages, setSavedPages] = useState<SavedPage[]>([]);
   const [finished, setFinished] = useState(false);
 
@@ -50,6 +52,19 @@ export function UploadFlow() {
 
   if (finished && savedPages.length > 0) {
     return <BatchSummaryStep pages={savedPages} onUploadAnother={startOver} />;
+  }
+
+  if (status === "partial") {
+    return (
+      <PartialBatchStep
+        batchSize={capture.batchSize}
+        readCount={capture.readCount}
+        failedPhotos={capture.failedPhotos}
+        onRetryFailed={capture.retryFailed}
+        onContinue={capture.continueWithRead}
+        onStartOver={startOver}
+      />
+    );
   }
 
   if (!currentPage) {
