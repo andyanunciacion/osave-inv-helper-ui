@@ -34,9 +34,10 @@ const FIELD_LABELS: Record<InferredField, string> = {
   total_item_price: "Total",
 };
 
-// Thick dashed sky outline + tint: filled in from the receipt's arithmetic,
-// not read. aria-invalid (blank) still wins on the border colour.
-const INFERRED_CLASS =
+// Thick dashed sky outline + tint: filled in from the receipt's arithmetic
+// (or, for the header's store code, from another page), not read.
+// aria-invalid (blank) still wins on the border colour.
+export const INFERRED_CLASS =
   "border-2 border-dashed border-sky-600 bg-sky-50 dark:border-sky-400 dark:bg-sky-500/15";
 
 function Field({
@@ -208,7 +209,9 @@ export function ItemRowEditor({
           />
         </Field>
         {item.hasMismatch ? (
-          <Badge variant="destructive" className="mb-3 md:mb-1.5">
+          // The destructive badge's default red-on-red-tint is ~4:1 in both
+          // themes, under AA for 12px text — red-700 / red-300 clear it.
+          <Badge variant="destructive" className="mb-3 text-red-700 md:mb-1.5 dark:text-red-300">
             Qty × Unit/Box × price ≠ total
           </Badge>
         ) : null}

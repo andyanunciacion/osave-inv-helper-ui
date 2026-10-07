@@ -16,9 +16,14 @@ export interface SavedPage {
 // totals. Pages are saved as they're confirmed, so this only reports.
 export function BatchSummaryStep({
   pages,
+  batchSize,
   onUploadAnother,
 }: {
   pages: SavedPage[];
+  // How many photos the upload had. "Page N" only means something for a
+  // multi-photo batch — on a single photo that added a later page to an
+  // existing delivery, "Page 1" read like the receipt's first page.
+  batchSize: number;
   onUploadAnother: () => void;
 }) {
   const totalItems = pages.reduce((sum, page) => sum + page.result.acceptedItems.length, 0);
@@ -43,10 +48,11 @@ export function BatchSummaryStep({
         {pages.map(({ index, result }) => (
           <li key={index} className="flex justify-between gap-2 rounded-md border px-3 py-2">
             <span>
-              Page {index + 1} · {result.delivery?.delivery_code}
+              {batchSize > 1 ? `Page ${index + 1} · ` : ""}
+              {result.delivery?.delivery_code}
             </span>
             <span>
-              {result.acceptedItems.length} item{result.acceptedItems.length === 1 ? "" : "s"}
+              {result.acceptedItems.length} item{result.acceptedItems.length === 1 ? "" : "s"} added
               {result.rejectedItems.length > 0 ? `, ${result.rejectedItems.length} rejected` : ""}
             </span>
           </li>

@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -76,6 +76,26 @@ describe("useDeliverySearch", () => {
     act(() => result.current.retry());
     await waitFor(() => expect(result.current.status).toBe("success"));
     expect(result.current.groups).toHaveLength(1);
+  });
+
+  it("reports offline, not an empty result, while the search is paused for no connection", async () => {
+    fetchGroupedSearch.mockResolvedValue([group()]);
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(
+        () => useDeliverySearch({ storeCode: "STORE1", query: "cola", range: undefined }),
+        { wrapper },
+      );
+
+      expect(result.current.status).toBe("offline");
+      expect(fetchGroupedSearch).not.toHaveBeenCalled();
+
+      act(() => onlineManager.setOnline(true));
+      await waitFor(() => expect(result.current.status).toBe("success"));
+      expect(result.current.groups).toHaveLength(1);
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it("fetches grouped results for a text query and reports hasActiveFilters", async () => {

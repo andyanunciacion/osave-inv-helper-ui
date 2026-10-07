@@ -31,7 +31,7 @@ export function useDeliverySearch({
   const trimmedQuery = query.trim();
   const hasActiveFilters = Boolean(trimmedQuery) || Boolean(range?.from);
 
-  const { data, isError, isLoading, refetch } = useQuery({
+  const { data, isError, isLoading, isPaused, refetch } = useQuery({
     queryKey: ["deliveries", storeCode, "search", trimmedQuery, range?.from, range?.to],
     queryFn: () => fetchGroupedSearch(storeCode as string, trimmedQuery, range),
     enabled: Boolean(storeCode) && Boolean(trimmedQuery),
@@ -40,7 +40,7 @@ export function useDeliverySearch({
   return {
     groups: data ?? [],
     hasActiveFilters,
-    status: toQueryStatus({ data, isError, isLoading }),
+    status: toQueryStatus({ data, isError, isLoading, isPaused }),
     retry: () => void refetch(),
   };
 }

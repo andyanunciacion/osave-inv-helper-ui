@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DeliveryItem } from "@/types/schema";
 import { useItemHistory } from "../hooks/use-item-history";
-import { useUpdateItemQuantity } from "../hooks/use-update-item-quantity";
+import { useQuantityCorrection } from "../hooks/use-quantity-correction";
 import { formatQuantity } from "../lib/format";
 
 interface ItemHistoryPanelProps {
@@ -18,34 +18,18 @@ interface ItemHistoryPanelProps {
 // Expanded panel under a search-result item row (virtual-item-list.tsx): a
 // quantity-correction form wired to PATCH .../items/:item_id, plus the
 // resulting audit trail (frontend-contract.md §8). Only mounted while the
-// row is expanded, so the history query (useItemHistory) stays lazy.
+// row is expanded, so the history query (useItemHistory) stays lazy. Thin:
+// only the form drafts live here — validation is useQuantityCorrection's.
 export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
   const [draftQuantity, setDraftQuantity] = useState(String(item.quantity ?? ""));
   const [reason, setReason] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
 
   const { history, isLoading } = useItemHistory(item.delivery_code, item.id, true);
-  const { updateQuantity, isPending } = useUpdateItemQuantity();
+  const { submit, isPending, message } = useQuantityCorrection(item);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    setFormError(null);
-
-    const parsed = Number(draftQuantity);
-    if (draftQuantity.trim() === "" || Number.isNaN(parsed) || parsed < 0) {
-      setFormError("Enter a valid quantity");
-      return;
-    }
-
-    try {
-      await updateQuantity(item.delivery_code, item.id, {
-        quantity: parsed,
-        reason: reason.trim() || null,
-      });
-      setReason("");
-    } catch {
-      setFormError("Couldn't save that change — try again.");
-    }
+    if ((await submit(draftQuantity, reason)) === "saved") setReason("");
   };
 
   return (
@@ -60,7 +44,7 @@ export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
             value={draftQuantity}
             onChange={(event) => setDraftQuantity(event.target.value)}
             inputMode="decimal"
-            aria-invalid={Boolean(formError)}
+            aria-invalid={message?.tone === "error"}
           />
         </div>
         <div className="flex flex-1 flex-col gap-1">
@@ -78,7 +62,14 @@ export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
           {isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : "Save"}
         </Button>
       </form>
-      {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
+      {message ? (
+        <p
+          role={message.tone === "error" ? "alert" : "status"}
+          className={message.tone === "error" ? "text-xs text-destructive" : "text-xs text-muted-foreground"}
+        >
+          {message.text}
+        </p>
+      ) : null}
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">History</span>

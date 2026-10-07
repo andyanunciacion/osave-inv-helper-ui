@@ -41,9 +41,19 @@ export interface FailedPhoto {
   retryable: boolean;
 }
 
+// How many photos of the in-flight OCR round have come back (read or
+// failed). Photos are sent in parallel, so this counts completions rather
+// than stepping through them in order.
+export interface CaptureProgress {
+  done: number;
+  total: number;
+}
+
 export interface UseOcrCaptureResult {
   status: CaptureStatus;
   error: CaptureError | null;
+  // Set while `processing`; null otherwise.
+  progress: CaptureProgress | null;
   pages: BatchPage[];
   currentIndex: number;
   currentPage: BatchPage | null;
@@ -119,8 +129,28 @@ export function useOcrCapture(): UseOcrCaptureResult {
   const [pages, setPages] = useState<BatchPage[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [outcomes, setOutcomes] = useState<PhotoOutcome[]>([]);
+  const [progress, setProgress] = useState<CaptureProgress | null>(null);
   // The session store the batch was captured under, for retries/reconcile.
   const storeCodeRef = useRef("");
+
+  // Sends each file to OCR in parallel, ticking `progress` as each settles.
+  // Progress stays up through the reconcile call; it's cleared whenever the
+  // batch leaves `processing` (see `leaveProcessing`).
+  const readAll = useCallback((files: File[]) => {
+    setProgress({ done: 0, total: files.length });
+    return Promise.allSettled(
+      files.map((file) =>
+        runOcr(file, storeCodeRef.current).finally(() =>
+          setProgress((p) => (p ? { ...p, done: p.done + 1 } : p)),
+        ),
+      ),
+    );
+  }, []);
+
+  const leaveProcessing = useCallback((next: CaptureStatus) => {
+    setProgress(null);
+    setStatus(next);
+  }, []);
 
   // Turns the read pages into the review queue — reconciling store codes
   // across them first when there's more than one.
@@ -129,7 +159,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
     if (results.length === 1) {
       setPages([{ ocrResult: results[0], receiptStoreCodeInferred: false }]);
       setCurrentIndex(0);
-      setStatus("done");
+      leaveProcessing("done");
       return;
     }
 
@@ -154,12 +184,12 @@ export function useOcrCapture(): UseOcrCaptureResult {
         })),
       );
       setCurrentIndex(0);
-      setStatus("done");
+      leaveProcessing("done");
     } catch {
       setError({ kind: "failed", message: "Couldn't verify store codes across the batch. Try again." });
-      setStatus("error");
+      leaveProcessing("error");
     }
-  }, []);
+  }, [leaveProcessing]);
 
   // Every photo read → straight on to review. None read → the first failure
   // is the error, as before. A mix → pause on `partial`.
@@ -172,12 +202,12 @@ export function useOcrCapture(): UseOcrCaptureResult {
       if (failed.length === 0) return finish(read);
       if (read.length === 0) {
         setError(failed[0].error);
-        setStatus("error");
+        leaveProcessing("error");
         return;
       }
-      setStatus("partial");
+      leaveProcessing("partial");
     },
-    [finish],
+    [finish, leaveProcessing],
   );
 
   const captureFiles = useCallback(
@@ -188,11 +218,11 @@ export function useOcrCapture(): UseOcrCaptureResult {
       setError(null);
 
       void (async () => {
-        const settled = await Promise.allSettled(files.map((file) => runOcr(file, sessionStoreCode)));
+        const settled = await readAll(files);
         await settle(files.map((file, i) => toOutcome(file, settled[i])));
       })();
     },
-    [settle],
+    [readAll, settle],
   );
 
   const retryFailed = useCallback(() => {
@@ -201,7 +231,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
     setStatus("processing");
 
     void (async () => {
-      const settled = await Promise.allSettled(toRetry.map((o) => runOcr(o.file, storeCodeRef.current)));
+      const settled = await readAll(toRetry.map((o) => o.file));
       await settle(
         outcomes.map((o) => {
           const k = toRetry.indexOf(o);
@@ -209,7 +239,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
         }),
       );
     })();
-  }, [outcomes, settle]);
+  }, [outcomes, readAll, settle]);
 
   const continueWithRead = useCallback(() => {
     const read = outcomes.flatMap((o) => (o.result ? [o.result] : []));
@@ -228,6 +258,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
     setPages([]);
     setCurrentIndex(0);
     setOutcomes([]);
+    setProgress(null);
   }, []);
 
   const failedPhotos: FailedPhoto[] = outcomes.flatMap((o) =>
@@ -237,6 +268,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
   return {
     status,
     error,
+    progress,
     pages,
     currentIndex,
     currentPage: pages[currentIndex] ?? null,

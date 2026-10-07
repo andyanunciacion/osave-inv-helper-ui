@@ -4,6 +4,7 @@ import { hasPriceMismatch } from "@/features/deliveries/lib/format";
 import type { CreateDeliveryResult, NewDeliveryInput } from "@/features/deliveries/types";
 import type { ItemUnit } from "@/types/schema";
 import { checkReceiptTotals, type TotalsCheck } from "../lib/receipt-totals";
+import { describeSaveError } from "../lib/save-error";
 import type { DraftHeader, DraftItem, OcrResult } from "../types";
 
 // §6 flow B step 4-5: the review/edit screen's state. Seeded from the OCR
@@ -40,9 +41,16 @@ export interface UseDeliveryDraftResult {
   // The backend requires the receipt's "To" store code; OCR returns it blank
   // when it couldn't read it, so it has to be typed from the paper.
   missingReceiptStoreCode: boolean;
+  // Same for the Transaction date: the backend rejects a blank one (400),
+  // and a later page of a batch can come back without it.
+  missingDeliveryDate: boolean;
   // Rows with numbers/code but no description. Dropping them silently would
   // lose data, so they block saving until named or removed.
   unnamedRowCount: number;
+  // Red-outlined cells still blank across all rows (item_name excluded —
+  // unnamedRowCount covers it). They block saving: a half-read row saved
+  // as-is would put a wrong/unknown quantity or price on record.
+  blankFieldCount: number;
   // The rows compared against the receipt's printed totals block — a
   // warning (a row may be missing, or a quantity misread), not a block.
   totalsCheck: TotalsCheck;
@@ -108,12 +116,26 @@ function hasContent(item: DraftItem): boolean {
   ].some((value) => !isBlank(value));
 }
 
+function blankFieldsOf(item: DraftItem): DraftItemField[] {
+  return hasContent(item) ? REQUIRED_ITEM_FIELDS.filter((field) => isBlank(item[field])) : [];
+}
+
+// Rows OCR left incomplete go first, so staff don't scroll a 40-row page to
+// find the few red-outlined cells. Stable, and done once when the draft is
+// seeded — re-sorting on edit would move a row out from under the user as
+// they fill it in.
+function missingFirst(items: DraftItem[]): DraftItem[] {
+  const incomplete = items.filter((item) => blankFieldsOf(item).length > 0);
+  if (incomplete.length === 0) return items;
+  return [...incomplete, ...items.filter((item) => blankFieldsOf(item).length === 0)];
+}
+
 export function useDeliveryDraft(
   ocrResult: OcrResult,
   sessionStoreCode: string,
 ): UseDeliveryDraftResult {
   const [header, setHeader] = useState<DraftHeader>(ocrResult.header);
-  const [items, setItems] = useState<DraftItem[]>(ocrResult.items);
+  const [items, setItems] = useState<DraftItem[]>(() => missingFirst(ocrResult.items));
   const [stage, setStage] = useState<DraftStage>("editing");
   const [result, setResult] = useState<CreateDeliveryResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -121,6 +143,7 @@ export function useDeliveryDraft(
 
   const receiptStoreCode = header.receipt_store_code.trim().toUpperCase();
   const missingReceiptStoreCode = !receiptStoreCode;
+  const missingDeliveryDate = isBlank(header.delivery_date);
   const storeMismatch = Boolean(receiptStoreCode) && receiptStoreCode !== sessionStoreCode.trim().toUpperCase();
 
   const itemViews: DraftItemView[] = useMemo(
@@ -133,9 +156,7 @@ export function useDeliveryDraft(
           toNumberOrNull(item.item_price),
           toNumberOrNull(item.total_item_price),
         ),
-        blankFields: hasContent(item)
-          ? REQUIRED_ITEM_FIELDS.filter((field) => isBlank(item[field]))
-          : [],
+        blankFields: blankFieldsOf(item),
       })),
     [items],
   );
@@ -145,10 +166,20 @@ export function useDeliveryDraft(
     [itemViews],
   );
 
+  const blankFieldCount = useMemo(
+    () => itemViews.reduce((sum, item) => sum + item.blankFields.filter((f) => f !== "item_name").length, 0),
+    [itemViews],
+  );
+
   const totalsCheck = useMemo(() => checkReceiptTotals(ocrResult.totals, items), [ocrResult.totals, items]);
 
   const canConfirm =
-    !storeMismatch && !missingReceiptStoreCode && unnamedRowCount === 0 && items.length > 0;
+    !storeMismatch &&
+    !missingReceiptStoreCode &&
+    !missingDeliveryDate &&
+    unnamedRowCount === 0 &&
+    blankFieldCount === 0 &&
+    items.length > 0;
 
   const updateHeaderField = useCallback((field: keyof DraftHeader, value: string) => {
     setHeader((prev) => ({ ...prev, [field]: value }));
@@ -207,12 +238,12 @@ export function useDeliveryDraft(
         setResult(res);
         setStage("submitted");
       })
-      .catch(() => {
-        // A network/server failure, distinct from a domain-level rejection
-        // (duplicate_delivery/store_mismatch/partial, which resolve
+      .catch((err: unknown) => {
+        // A network failure or an HTTP error, distinct from a domain-level
+        // rejection (duplicate_delivery/store_mismatch/partial, which resolve
         // normally) — stay on the review screen with the typed rows intact,
-        // same as editAgain.
-        setSubmitError("Couldn't reach the server. Check your connection and try again.");
+        // same as editAgain. describeSaveError tells the two kinds apart.
+        setSubmitError(describeSaveError(err));
         setStage("editing");
       });
   }, [canConfirm, header, items, sessionStoreCode, submitDelivery]);
@@ -230,7 +261,9 @@ export function useDeliveryDraft(
     items: itemViews,
     storeMismatch,
     missingReceiptStoreCode,
+    missingDeliveryDate,
     unnamedRowCount,
+    blankFieldCount,
     totalsCheck,
     canConfirm,
     stage,

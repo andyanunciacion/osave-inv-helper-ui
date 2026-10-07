@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { formatItemLabel, formatQuantity, hasPriceMismatch } from "./format";
+import { formatCurrency, formatItemLabel, formatQuantity, hasPriceMismatch } from "./format";
+
+describe("formatCurrency", () => {
+  it("groups thousands and keeps two decimals, like the receipt prints", () => {
+    expect(formatCurrency(9576.72)).toBe("₱9,576.72");
+    expect(formatCurrency(39600)).toBe("₱39,600.00");
+    expect(formatCurrency(84)).toBe("₱84.00");
+    expect(formatCurrency(1234567.5)).toBe("₱1,234,567.50");
+  });
+
+  it("shows a dash when the amount is unknown", () => {
+    expect(formatCurrency(null)).toBe("—");
+  });
+});
 
 describe("formatItemLabel", () => {
   it("puts the item code before the item name", () => {

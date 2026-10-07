@@ -55,12 +55,12 @@ export function PartialBatchStep({
 
       <div className="flex flex-col gap-2 sm:flex-row">
         {retryableCount > 0 ? (
-          <Button type="button" variant="outline" className="flex-1" onClick={onRetryFailed}>
+          <Button type="button" variant="outline" className="sm:flex-1" onClick={onRetryFailed}>
             <RotateCw className="size-4" aria-hidden="true" />
             Retry {retryableCount} failed
           </Button>
         ) : null}
-        <Button type="button" className="flex-1" onClick={onContinue}>
+        <Button type="button" className="sm:flex-1" onClick={onContinue}>
           Continue with {readCount}
         </Button>
       </div>
