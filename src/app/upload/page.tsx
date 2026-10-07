@@ -8,7 +8,7 @@ export default function UploadPage() {
   return (
     <RequireStoreSession>
       <div className="flex flex-1 flex-col items-center gap-6 bg-background px-4 py-8 font-sans">
-        <main className="flex w-full max-w-md flex-col gap-6 rounded-lg bg-card p-6 text-card-foreground shadow-2xl shadow-black/30 sm:p-8">
+        <main className="flex w-full max-w-md flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
