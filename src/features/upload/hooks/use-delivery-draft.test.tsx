@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { DeliveryRequestError } from "@/features/deliveries/lib/request-error";
 import type { CreateDeliveryResult } from "@/features/deliveries/types";
 import type { OcrResult } from "../types";
 import { useDeliveryDraft } from "./use-delivery-draft";
@@ -152,7 +153,53 @@ describe("useDeliveryDraft", () => {
 
     act(() => result.current.updateItemField("b", "item_name", "Baby Diaper Pants"));
     expect(result.current.unnamedRowCount).toBe(0);
+    // Its other blank cells still block (see the blank-cell test below).
+    expect(result.current.canConfirm).toBe(false);
+  });
+
+  it("requires the transaction date — a blank one blocks confirming until it's entered", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult({ delivery_date: "" }), "STORE1"), {
+      wrapper,
+    });
+    expect(result.current.missingDeliveryDate).toBe(true);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateHeaderField("delivery_date", "2026-09-14"));
+    expect(result.current.missingDeliveryDate).toBe(false);
     expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("blocks confirming while any red-outlined cell is blank, until it's filled in", () => {
+    const draft = ocrResult();
+    draft.items[0].quantity = "";
+    draft.items[0].item_price = "";
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    expect(result.current.blankFieldCount).toBe(2);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateItemField("a", "quantity", "2"));
+    expect(result.current.blankFieldCount).toBe(1);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateItemField("a", "item_price", "10"));
+    expect(result.current.blankFieldCount).toBe(0);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("puts rows with blank cells first, and doesn't reorder them as they're filled in", () => {
+    const draft = ocrResult();
+    const complete = draft.items[0];
+    draft.items = [
+      { ...complete, localId: "first-complete", item_code: "C1" },
+      { ...complete, localId: "incomplete", item_code: "C2", quantity: "" },
+      { ...complete, localId: "second-complete", item_code: "C3" },
+    ];
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    const order = () => result.current.items.map((item) => item.localId);
+    expect(order()).toEqual(["incomplete", "first-complete", "second-complete"]);
+
+    act(() => result.current.updateItemField("incomplete", "quantity", "2"));
+    expect(order()).toEqual(["incomplete", "first-complete", "second-complete"]);
   });
 
   it("sends unit_count, quantity and the required receipt_store_code on confirm", async () => {
@@ -240,6 +287,21 @@ describe("useDeliveryDraft", () => {
     expect(result.current.stage).toBe("editing");
     expect(result.current.result).toBeNull();
     expect(result.current.items).toHaveLength(1);
+  });
+
+  it("reports a server refusal as such, not as a connection problem", async () => {
+    createDeliveryRequest.mockRejectedValue(new DeliveryRequestError(400, "invalid_body", ["delivery_date"]));
+
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ delivery_code: "INV-DRAFT-400" }), "STORE1"),
+      { wrapper },
+    );
+    act(() => result.current.confirm());
+
+    await waitFor(() => expect(result.current.submitError).not.toBeNull());
+    expect(result.current.submitError).toContain("Transaction date");
+    expect(result.current.submitError).not.toContain("connection");
+    expect(result.current.stage).toBe("editing");
   });
 
   it("stops marking a calculated cell as calculated once the user edits it", () => {

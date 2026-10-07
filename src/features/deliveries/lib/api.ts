@@ -15,6 +15,7 @@ import type {
   UpdateItemQuantityInput,
   UpdateItemQuantityResult,
 } from "../types";
+import { DeliveryRequestError } from "./request-error";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -49,7 +50,9 @@ export async function createDeliveryRequest(input: NewDeliveryInput): Promise<Cr
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    throw new Error(`Failed to create delivery (status ${res.status})`);
+    // Carries status + rejected fields so the review screen can tell "the
+    // server refused this" apart from "couldn't reach the server".
+    throw await DeliveryRequestError.fromResponse(res);
   }
   return res.json() as Promise<CreateDeliveryResult>;
 }

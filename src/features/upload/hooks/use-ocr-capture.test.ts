@@ -58,6 +58,30 @@ describe("useOcrCapture", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("counts photos as each one comes back, in whatever order they finish", async () => {
+    const resolvers: Array<() => void> = [];
+    runOcr.mockImplementation(
+      () => new Promise((resolve) => resolvers.push(() => resolve(ocrApiResponse()))),
+    );
+    runOcrReconcile.mockImplementation(async (_store: string, headers: unknown[]) =>
+      headers.map((h) => ({ ...(h as object), receipt_store_code_inferred: false })),
+    );
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("a.jpg"), file("b.jpg"), file("c.jpg")], "245"));
+    expect(result.current.progress).toEqual({ done: 0, total: 3 });
+
+    await act(async () => resolvers[2]());
+    expect(result.current.progress).toEqual({ done: 1, total: 3 });
+
+    await act(async () => {
+      resolvers[0]();
+      resolvers[1]();
+    });
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.progress).toBeNull();
+  });
+
   it("passes through calculated cells, handwriting flags and the printed totals", async () => {
     const response = ocrApiResponse();
     runOcr.mockResolvedValue({

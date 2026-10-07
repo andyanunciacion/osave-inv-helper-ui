@@ -6,11 +6,12 @@ import type { RecentUpload } from "../types";
 // RecentUpload shape this feature's components render.
 export interface UseRecentUploadsResult {
   uploads: RecentUpload[];
+  isLoading: boolean;
 }
 
 export function useRecentUploads(): UseRecentUploadsResult {
   const { storeCode } = useStoreSession();
-  const { groups } = useRecentDeliveries(storeCode);
+  const { groups, isLoading } = useRecentDeliveries(storeCode);
 
   const uploads: RecentUpload[] = groups.map((group) => ({
     deliveryCode: group.delivery.delivery_code,
@@ -18,5 +19,5 @@ export function useRecentUploads(): UseRecentUploadsResult {
     itemCount: group.items.length,
   }));
 
-  return { uploads };
+  return { uploads, isLoading };
 }

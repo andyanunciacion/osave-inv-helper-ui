@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -74,5 +74,24 @@ describe("useUnifiedItemSearch", () => {
     act(() => result.current.retry());
     await waitFor(() => expect(result.current.items).toHaveLength(1));
     expect(result.current.status).toBe("success");
+  });
+
+  it("reports offline, not an empty list, while paused for no connection", async () => {
+    const range = { from: new Date(2026, 1, 1), to: new Date(2026, 1, 1) };
+    fetchUnifiedSearch.mockResolvedValue([item()]);
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => useUnifiedItemSearch({ storeCode: "STORE1", range }), {
+        wrapper,
+      });
+
+      expect(result.current.status).toBe("offline");
+
+      act(() => onlineManager.setOnline(true));
+      await waitFor(() => expect(result.current.status).toBe("success"));
+      expect(result.current.items).toHaveLength(1);
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });

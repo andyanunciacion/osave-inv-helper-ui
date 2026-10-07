@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { AlertTriangle, Camera, ImagePlus, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { CaptureError, CaptureStatus } from "../hooks/use-ocr-capture";
+import type { CaptureError, CaptureProgress, CaptureStatus } from "../hooks/use-ocr-capture";
 
 // `.jfif` is listed explicitly: Chrome on Windows doesn't treat it as an
 // image, so `image/*` alone can leave Messenger-saved receipts out of the
@@ -14,6 +14,7 @@ const IMAGE_ACCEPT = "image/*,.jfif";
 interface CaptureStepProps {
   status: CaptureStatus;
   error: CaptureError | null;
+  progress: CaptureProgress | null;
   onFilesSelected: (files: File[]) => void;
 }
 
@@ -23,15 +24,23 @@ interface CaptureStepProps {
 // it doesn't support multi-select on mobile, so a second, camera-less input
 // (`multiple`) covers picking several already-taken photos at once for a
 // multi-page/multi-receipt batch upload.
-export function CaptureStep({ status, error, onFilesSelected }: CaptureStepProps) {
+export function CaptureStep({ status, error, progress, onFilesSelected }: CaptureStepProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   if (status === "processing") {
+    const isBatch = progress !== null && progress.total > 1;
     return (
-      <div className="flex flex-col items-center gap-3 py-10 text-center">
+      <div role="status" className="flex flex-col items-center gap-3 py-10 text-center">
         <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">Reading receipt…</p>
+        <p className="text-sm text-muted-foreground">
+          {isBatch ? `Reading ${progress.total} photos…` : "Reading receipt…"}
+        </p>
+        {isBatch ? (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {progress.done} of {progress.total} done
+          </p>
+        ) : null}
       </div>
     );
   }

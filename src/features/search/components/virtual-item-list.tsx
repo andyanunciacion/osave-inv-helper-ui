@@ -14,6 +14,11 @@ interface VirtualItemListProps<T extends DeliveryItem> {
   maxHeight?: number;
 }
 
+// At or under this many rows the list renders at full height and the
+// results card scrolls instead — a capped box here would be a second,
+// nested scroll area with empty space below it.
+const SHORT_LIST_MAX = 20;
+
 // Renders only the item rows currently in view. Used both for an expanded
 // delivery group's items and for the unified (date-only) flat list — either
 // can run to hundreds of rows once real data replaces the sample set.
@@ -22,6 +27,7 @@ export function VirtualItemList<T extends DeliveryItem>({
   renderMeta,
   maxHeight = 420,
 }: VirtualItemListProps<T>) {
+  const capped = items.length > SHORT_LIST_MAX;
   const parentRef = useRef<HTMLDivElement>(null);
   // Local UI state: which single row (if any) has its history panel open.
   // Keyed by item id rather than row index so it survives virtualization
@@ -36,7 +42,7 @@ export function VirtualItemList<T extends DeliveryItem>({
   });
 
   return (
-    <div ref={parentRef} style={{ maxHeight, overflowY: "auto" }}>
+    <div ref={parentRef} style={capped ? { maxHeight, overflowY: "auto" } : undefined}>
       <div
         style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}
       >

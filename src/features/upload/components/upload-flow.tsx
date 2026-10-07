@@ -51,7 +51,7 @@ export function UploadFlow() {
   };
 
   if (finished && savedPages.length > 0) {
-    return <BatchSummaryStep pages={savedPages} onUploadAnother={startOver} />;
+    return <BatchSummaryStep pages={savedPages} batchSize={pages.length} onUploadAnother={startOver} />;
   }
 
   if (status === "partial") {
@@ -72,10 +72,15 @@ export function UploadFlow() {
       <CaptureStep
         status={status}
         error={error}
+        progress={capture.progress}
         onFilesSelected={(files) => captureFiles(files, storeCode ?? "")}
       />
     );
   }
+
+  // The page confirmed just before this one, so the review can say it was
+  // saved — the auto-advance is otherwise easy to miss.
+  const previousSaved = savedPages.find((page) => page.index === currentIndex - 1);
 
   return (
     <DraftReview
@@ -84,6 +89,13 @@ export function UploadFlow() {
       receiptStoreCodeInferred={currentPage.receiptStoreCodeInferred}
       storeCode={storeCode ?? ""}
       pageLabel={pages.length > 1 ? `Page ${currentIndex + 1} of ${pages.length}` : null}
+      savedNotice={
+        previousSaved
+          ? `Page ${currentIndex} saved — ${previousSaved.result.acceptedItems.length} item${previousSaved.result.acceptedItems.length === 1 ? "" : "s"}`
+          : null
+      }
+      unsavedPageCount={pages.length - currentIndex}
+      hasSavedPages={savedPages.length > 0}
       isLastPage={isLastPage}
       onSaved={handleSaved}
       onCancel={handleCancel}
@@ -96,6 +108,9 @@ function DraftReview({
   receiptStoreCodeInferred,
   storeCode,
   pageLabel,
+  savedNotice,
+  unsavedPageCount,
+  hasSavedPages,
   isLastPage,
   onSaved,
   onCancel,
@@ -104,6 +119,9 @@ function DraftReview({
   receiptStoreCodeInferred: boolean;
   storeCode: string;
   pageLabel: string | null;
+  savedNotice: string | null;
+  unsavedPageCount: number;
+  hasSavedPages: boolean;
   isLastPage: boolean;
   onSaved: (result: CreateDeliveryResult) => void;
   onCancel: () => void;
@@ -134,6 +152,9 @@ function DraftReview({
     <ReviewStep
       draft={draft}
       pageLabel={pageLabel}
+      savedNotice={savedNotice}
+      unsavedPageCount={unsavedPageCount}
+      hasSavedPages={hasSavedPages}
       receiptStoreCodeInferred={receiptStoreCodeInferred}
       onCancel={onCancel}
     />

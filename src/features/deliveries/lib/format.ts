@@ -1,9 +1,13 @@
 // Small display-formatting helpers shared by search results and the upload
 // review screen — both render the same delivery_items fields (§4).
 
+// Fixed locale so server and client render the same string (no hydration
+// mismatch); grouping matches how the receipt prints amounts (9,576.72).
+const AMOUNT = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export function formatCurrency(value: number | null): string {
   if (value === null) return "—";
-  return `₱${value.toFixed(2)}`;
+  return `₱${AMOUNT.format(value)}`;
 }
 
 // e.g. "2 BOX · 12/box". The per-box count is only shown for boxes — a PIECE

@@ -76,7 +76,10 @@ export function SearchBar({
             }
           />
           <PopoverContent align="end" className="w-auto p-0 shadow-xl border">
+            {/* 44px day cells on touch (the default 28px is too small to hit
+                one-handed); back to compact at md: for pointer devices. */}
             <Calendar
+              className="[--cell-size:--spacing(11)] md:[--cell-size:--spacing(8)]"
               mode="range"
               selected={range}
               onSelect={onRangeChange}
@@ -92,16 +95,14 @@ export function SearchBar({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
                     onClick={onClearRange}
                   >
-                    <X className="size-3.5" aria-hidden="true" />
+                    <X className="size-4" aria-hidden="true" />
                     Clear
                   </Button>
                 ) : null}
                 <Button
                   type="button"
-                  size="sm"
                   className="cursor-pointer"
                   disabled={!rangeLabel?.trim()}
                   onClick={() => {

@@ -31,7 +31,7 @@ export function SearchResultsPage() {
   });
 
   const { status, retry } = isDateOnly ? unified : grouped;
-  if (status === "loading" || status === "error") {
+  if (status === "loading" || status === "offline" || status === "error") {
     return <ResultsStatus status={status} onRetry={retry} />;
   }
 

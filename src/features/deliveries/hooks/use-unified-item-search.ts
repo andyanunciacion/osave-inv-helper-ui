@@ -25,7 +25,7 @@ export function useUnifiedItemSearch({
   storeCode,
   range,
 }: UseUnifiedItemSearchParams): UseUnifiedItemSearchResult {
-  const { data, isError, isLoading, refetch } = useQuery({
+  const { data, isError, isLoading, isPaused, refetch } = useQuery({
     queryKey: ["deliveries", storeCode, "unified", range?.from, range?.to],
     queryFn: () => fetchUnifiedSearch(storeCode as string, range),
     enabled: Boolean(storeCode) && Boolean(range?.from),
@@ -33,7 +33,7 @@ export function useUnifiedItemSearch({
 
   return {
     items: data ?? [],
-    status: toQueryStatus({ data, isError, isLoading }),
+    status: toQueryStatus({ data, isError, isLoading, isPaused }),
     retry: () => void refetch(),
   };
 }
