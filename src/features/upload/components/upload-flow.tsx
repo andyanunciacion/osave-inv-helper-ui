@@ -5,6 +5,7 @@ import type { CreateDeliveryResult } from "@/features/deliveries/types";
 import { useStoreSession } from "@/features/store-session/hooks/use-store-session";
 import { useDeliveryDraft } from "../hooks/use-delivery-draft";
 import { useOcrCapture } from "../hooks/use-ocr-capture";
+import { savedPageNotice } from "../lib/merged-items";
 import type { OcrResult } from "../types";
 import { BatchSummaryStep, type SavedPage } from "./batch-summary-step";
 import { CaptureStep } from "./capture-step";
@@ -89,11 +90,7 @@ export function UploadFlow() {
       receiptStoreCodeInferred={currentPage.receiptStoreCodeInferred}
       storeCode={storeCode ?? ""}
       pageLabel={pages.length > 1 ? `Page ${currentIndex + 1} of ${pages.length}` : null}
-      savedNotice={
-        previousSaved
-          ? `Page ${currentIndex} saved — ${previousSaved.result.acceptedItems.length} item${previousSaved.result.acceptedItems.length === 1 ? "" : "s"}`
-          : null
-      }
+      savedNotice={previousSaved ? savedPageNotice(currentIndex, previousSaved.result) : null}
       unsavedPageCount={pages.length - currentIndex}
       hasSavedPages={savedPages.length > 0}
       isLastPage={isLastPage}

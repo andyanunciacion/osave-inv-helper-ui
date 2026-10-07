@@ -52,16 +52,29 @@ Fixed during the pass: the #35 partial-batch screen's "Retry N failed" /
 
 ### Bugs
 
-- **The #21 merged-duplicate notice never shows after a clean save.** Since
-  #27, a `success` result auto-advances (`upload-flow.tsx` `DraftReview`
-  effect → `handleSaved`) straight to `BatchSummaryStep`, which ignores
-  `mergedItems`; `MergedItemsNotice` is only rendered by `ResultStep`, which
-  now only appears for `partial` results. Seen twice on fresh data: the
-  Messenger page (7 rows → 6 saved, 4272 merged) and page 3 of the `13*`
-  batch (21 rows → 19 saved) — no notice either time. The summary should
-  list merged items per page (and flag the ones whose other fields
-  disagreed, as #21 intended). Same screen also lost #21's "Receipt has more
-  pages? Upload the next page" hint.
+- ~~**The #21 merged-duplicate notice never shows after a clean save.**~~
+  **Fixed 2026-10-07.** Since #27 a `success` result auto-advanced straight
+  to `BatchSummaryStep`, which ignored `mergedItems` (the backend sends them
+  with `status: "success"`; only `ResultStep`, now reached only for
+  `partial`, rendered them). `MergedItemsNotice` moved to its own file and
+  `BatchSummaryStep` renders it under each page that had merges (amber
+  "need a check" for `fieldsDisagreed`); the next page's banner reads "Page
+  N saved — 6 items · 1 item combined" (`savedPageNotice` in
+  `upload/lib/merged-items.ts`, unit-tested). The summary shows the
+  "Receipt has more pages?" hint again. Verified live: the two merge pages
+  were deleted from the DB and re-uploaded one at a time — the Messenger page
+  showed "1 item combined — 4272", `13(2).jfif` "2 items combined — 4272,
+  4295"; DB matches its earlier state (14 / 70 items). The next-page banner
+  (a merge on a non-final batch page) and an amber `fieldsDisagreed` merge
+  weren't triggered.
+  `frontend-contract.md` §2 synced with the server's copy (`mergedItems`,
+  merge-vs-reject rules).
+- **Follow-up: warn about repeated item codes before Confirm.** A merge is
+  only reported after saving, and only quantity can be edited afterwards — so
+  a misread code (`fieldsDisagreed`) can't really be fixed. `useDeliveryDraft`
+  could group rows by the backend's key (`item_code` or
+  `name:<lowercased item_name>`) and the review could show a non-blocking
+  "These rows will be combined" alert, amber when the other fields differ.
 - ~~**A paused search shows "No deliveries found".**~~ **Fixed 2026-10-07.**
   TanStack Query pauses a query while the browser is offline, or a retry
   while the page is hidden, and `isLoading` is false while paused — so
