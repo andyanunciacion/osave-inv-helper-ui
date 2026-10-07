@@ -15,7 +15,7 @@ export default function ResultsPage() {
         <div className="flex w-full max-w-md flex-1 flex-col gap-4 overflow-hidden">
           <Suspense fallback={null}>
             <ResultsHeader />
-            <main className="flex flex-1 flex-col gap-6 overflow-y-auto rounded-lg bg-card p-6 text-card-foreground shadow-2xl shadow-black/30 sm:p-8">
+            <main className="flex flex-1 flex-col gap-6 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
               <SearchResultsPage />
             </main>
           </Suspense>
