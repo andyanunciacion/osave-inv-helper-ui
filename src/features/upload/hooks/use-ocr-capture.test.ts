@@ -148,13 +148,57 @@ describe("useOcrCapture", () => {
     await waitFor(() => expect(result.current.error?.kind).toBe("limit"));
   });
 
-  it("falls back to a generic error for anything else (network, 502, unreadable photo)", async () => {
+  it("reports a request that never got an answer as a connection problem", async () => {
     runOcr.mockRejectedValue(new TypeError("Failed to fetch"));
 
     const { result } = renderHook(() => useOcrCapture());
     act(() => result.current.captureFiles([file()], "245"));
 
-    await waitFor(() => expect(result.current.error?.kind).toBe("failed"));
+    await waitFor(() => expect(result.current.error?.kind).toBe("network"));
+  });
+
+  it("fails a file that isn't an image without sending it", async () => {
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([new File(["x"], "notes.txt", { type: "text/plain" })], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.error).toMatchObject({ kind: "invalid_file", fileName: "notes.txt" });
+    expect(runOcr).not.toHaveBeenCalled();
+  });
+
+  it("sends the rest of a batch when one file is rejected up front, and never retries that file", async () => {
+    runOcr.mockResolvedValue(ocrApiResponse());
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() =>
+      result.current.captureFiles(
+        [file("good.jpg"), new File(["x"], "notes.txt", { type: "text/plain" })],
+        "245",
+      ),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+    expect(runOcr).toHaveBeenCalledTimes(1);
+    expect(result.current.failedPhotos).toEqual([
+      { fileName: "notes.txt", error: expect.objectContaining({ kind: "invalid_file" }), retryable: false },
+    ]);
+
+    act(() => result.current.retryFailed());
+    expect(runOcr).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["invalid_file_type", "Uploaded file must be an image"],
+    ["file_too_large", "Image must be 10MB or smaller"],
+    ["daily_limit_reached", "Daily OCR limit reached"],
+  ])("doesn't offer to retry a photo the backend rejected with %s", async (code, message) => {
+    runOcr.mockResolvedValueOnce(ocrApiResponse()).mockRejectedValueOnce(new OcrError(code, message));
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("good.jpg"), file("bad.jpg")], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+    expect(result.current.failedPhotos[0].retryable).toBe(false);
   });
 
   it("clears the error and result on reset", async () => {

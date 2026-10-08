@@ -15,8 +15,9 @@ in-memory sample store and mock OCR were removed in #16/#19. Issue branches
 committed and pushed on `18-change-theme-to-generic-inventory-system` but not
 yet merged into `develop` — open the PR.
 
-Items 2–5 below were re-verified against code on 2026-10-07 and are all still
-open; nothing merged since 2026-09-25 (#31, #32, #35, #37) closed any of them.
+Items 2–5 below were re-verified against code on 2026-10-07 and were all still
+open then; nothing merged since 2026-09-25 (#31, #32, #35, #37) closed any of
+them. Item 2 has since been done (#46, 2026-10-08).
 Item 1 is the follow-up list from the first full browser pass (2026-10-07).
 
 ---
@@ -170,23 +171,18 @@ Follow-ups from that pass, also done 2026-10-07:
   contrast" above; the partial-batch and batch-summary screens weren't
   re-viewed in light, but use the same tokens as screens that were.)
 
-## 2. Surface specific OCR errors on the capture screen
+## 2. ~~Surface specific OCR errors on the capture screen~~ — done (#46)
 
-`toCaptureError` (`features/upload/hooks/use-ocr-capture.ts`) maps every
-backend error except `store_mismatch` and the rate limits to the same generic
-"Couldn't read that receipt. Try again." — so `invalid_file_type`,
-`file_too_large` (> 10MB) and `ocr_failed` all look identical to staff, and
-"try again" is wrong advice for the first two. This is what made the #28 JFIF
-bug look like an unreadable photo. Small change: add kinds/messages for the
-file-type and size errors.
-
-Still open as of 2026-10-07, and #35 made it slightly worse: `isRetryable`
-treats those errors as retryable (only `store_mismatch` is excluded), so the
-partial-batch screen offers "Retry N failed" for a photo that is the wrong
-file type or too large and will fail identically. When adding the new kinds,
-mark them not retryable too. Confirmed in the browser 2026-10-07: a `.txt`
-in a batch got a 400 from `/api/ocr` and the partial screen showed "Couldn't
-read that receipt. Try again." with "Retry 1 failed".
+Done 2026-10-08. `features/upload/lib/capture-error.ts` gives each cause its
+own title, message and `retryable` flag: not an image / over 10MB (both now
+also caught in the browser before sending, so they never use up the OCR rate
+limit), no connection, wrong store, per-minute vs daily limit, and an
+unreadable photo (the raw Vision error text from `ocr_failed` is no longer
+shown). Not retried by "Retry N failed": wrong file type, too large, wrong
+store, daily limit. Browser-checked with a `.txt` ("Not a photo"). Not seen
+live: the partial-batch screen with a non-retryable row (needs one billed OCR
+call for the good photo), and an over-10MB photo (the browser tool can't
+upload one). Both are unit-tested.
 
 ## 3. Background upload queue UX (§8 of main-file.md)
 
