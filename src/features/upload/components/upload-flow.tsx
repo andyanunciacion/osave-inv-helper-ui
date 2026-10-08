@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { CreateDeliveryResult } from "@/features/deliveries/types";
 import { useStoreSession } from "@/features/store-session/hooks/use-store-session";
 import { useDeliveryDraft } from "../hooks/use-delivery-draft";
 import { useOcrCapture } from "../hooks/use-ocr-capture";
+import { useUploadBatch } from "../hooks/use-upload-batch";
 import { savedPageNotice } from "../lib/merged-items";
 import type { OcrResult } from "../types";
-import { BatchSummaryStep, type SavedPage } from "./batch-summary-step";
+import { BatchSummaryStep } from "./batch-summary-step";
 import { CaptureStep } from "./capture-step";
 import { PartialBatchStep } from "./partial-batch-step";
 import { ResultStep } from "./result-step";
@@ -19,40 +20,30 @@ import { ReviewStep } from "./review-step";
 // runs every photo's OCR + the /api/ocr/reconcile cross-check up front
 // (useOcrCapture), then queues the resolved pages through this same
 // single-page review/confirm flow one at a time, auto-advancing after each
-// confirm; the backend still appends each page to the same delivery.
+// confirm; the backend still appends each page to the same delivery. Which
+// pages were saved/skipped lives in useUploadBatch.
 export function UploadFlow() {
   const { storeCode } = useStoreSession();
   const capture = useOcrCapture();
-  const { status, error, pages, currentIndex, currentPage, isLastPage, captureFiles, advance, reset } =
-    capture;
-  const [savedPages, setSavedPages] = useState<SavedPage[]>([]);
-  const [finished, setFinished] = useState(false);
+  const { status, error, pages, currentIndex, currentPage, isLastPage, captureFiles } = capture;
+  const batch = useUploadBatch({
+    pageCount: pages.length,
+    currentIndex,
+    isLastPage,
+    advance: capture.advance,
+    reset: capture.reset,
+  });
+  const { savedPages, startOver } = batch;
 
-  const startOver = () => {
-    setSavedPages([]);
-    setFinished(false);
-    reset();
-  };
-
-  // Keyed by page index so a repeated call (e.g. effect re-run) is harmless.
-  const handleSaved = (result: CreateDeliveryResult) => {
-    setSavedPages((prev) => [
-      ...prev.filter((page) => page.index !== currentIndex),
-      { index: currentIndex, result },
-    ]);
-    if (isLastPage) setFinished(true);
-    else advance();
-  };
-
-  // Cancelling mid-batch keeps what's already saved and reports it; with
-  // nothing saved yet it just returns to capture.
-  const handleCancel = () => {
-    if (savedPages.length > 0) setFinished(true);
-    else startOver();
-  };
-
-  if (finished && savedPages.length > 0) {
-    return <BatchSummaryStep pages={savedPages} batchSize={pages.length} onUploadAnother={startOver} />;
+  if (batch.finished) {
+    return (
+      <BatchSummaryStep
+        pages={savedPages}
+        skippedPages={batch.skippedPages}
+        batchSize={pages.length}
+        onUploadAnother={startOver}
+      />
+    );
   }
 
   if (status === "partial") {
@@ -94,8 +85,10 @@ export function UploadFlow() {
       unsavedPageCount={pages.length - currentIndex}
       hasSavedPages={savedPages.length > 0}
       isLastPage={isLastPage}
-      onSaved={handleSaved}
-      onCancel={handleCancel}
+      skipLabel={batch.skipLabel}
+      onSaved={batch.recordSaved}
+      onSkip={batch.skip}
+      onCancel={batch.cancel}
     />
   );
 }
@@ -109,7 +102,9 @@ function DraftReview({
   unsavedPageCount,
   hasSavedPages,
   isLastPage,
+  skipLabel,
   onSaved,
+  onSkip,
   onCancel,
 }: {
   ocrResult: OcrResult;
@@ -120,7 +115,9 @@ function DraftReview({
   unsavedPageCount: number;
   hasSavedPages: boolean;
   isLastPage: boolean;
+  skipLabel: string;
   onSaved: (result: CreateDeliveryResult) => void;
+  onSkip: () => void;
   onCancel: () => void;
 }) {
   const draft = useDeliveryDraft(ocrResult, storeCode);
@@ -141,6 +138,8 @@ function DraftReview({
         onEditAgain={draft.editAgain}
         continueLabel={isLastPage ? "Finish" : "Continue to next page"}
         onContinue={() => onSaved(result)}
+        skipLabel={skipLabel}
+        onSkip={onSkip}
       />
     );
   }
