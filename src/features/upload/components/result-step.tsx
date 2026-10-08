@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Merge, XCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { CreateDeliveryResult, MergedItem } from "@/features/deliveries/types";
+import type { CreateDeliveryResult } from "@/features/deliveries/types";
+import { MergedItemsNotice } from "./merged-items-notice";
 
 interface ResultStepProps {
   result: CreateDeliveryResult;
@@ -15,50 +15,6 @@ interface ResultStepProps {
   // batch (upload-flow.tsx decides which).
   continueLabel: string;
   onContinue: () => void;
-}
-
-// The receipt printed the same item twice on this page and the backend
-// combined the rows (§5 rule 3) — surfaced here, after save, since that's
-// when the merge actually happens. A row where the combined fields
-// disagreed (different price/unit/name between the repeats) gets its own,
-// more insistent alert: that usually means an item code was misread rather
-// than genuinely repeated, and is worth checking against the paper receipt.
-function MergedItemsNotice({ items }: { items: MergedItem[] }) {
-  const disagreed = items.filter((item) => item.fieldsDisagreed);
-  const clean = items.filter((item) => !item.fieldsDisagreed);
-
-  const label = (item: MergedItem) =>
-    `${item.item_code ?? item.item_name} (${item.mergedCount} rows combined)`;
-
-  return (
-    <div className="flex flex-col gap-2 text-left">
-      {clean.length > 0 ? (
-        <Alert>
-          <Merge />
-          <AlertTitle>
-            {clean.length} item{clean.length === 1 ? "" : "s"} combined
-          </AlertTitle>
-          <AlertDescription>
-            Listed twice on the receipt, so the quantities were added together:{" "}
-            {clean.map(label).join(", ")}.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {disagreed.length > 0 ? (
-        <Alert className="border-amber-500/50">
-          <AlertTriangle className="text-amber-600 dark:text-amber-400" />
-          <AlertTitle>
-            {disagreed.length} combined item{disagreed.length === 1 ? "" : "s"} need a check
-          </AlertTitle>
-          <AlertDescription>
-            These were listed twice with different price, unit, or name, then combined using the
-            first row&apos;s values — check them against the receipt:{" "}
-            {disagreed.map(label).join(", ")}.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-    </div>
-  );
 }
 
 // Thin: renders the outcome of useDeliveryDraft's confirm() — §6 flow B

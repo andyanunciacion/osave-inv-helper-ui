@@ -109,11 +109,19 @@ interface RejectedItem {
   reason: "duplicate_item_code";
 }
 
+interface MergedItem {
+  item_code: string | null;
+  item_name: string;
+  mergedCount: number;     // how many submitted rows were combined into this one (>= 2)
+  fieldsDisagreed: boolean; // unit/unit_count/item_price/item_name differed between the merged rows
+}
+
 interface CreateDeliveryResult {
   status: CreateDeliveryStatus;
   delivery: Delivery | null;      // null on "duplicate_delivery" and "store_mismatch"
   acceptedItems: DeliveryItem[];
   rejectedItems: RejectedItem[];
+  mergedItems: MergedItem[];      // always present, [] when nothing was merged
 }
 ```
 
@@ -131,11 +139,21 @@ Behavior the review screen depends on:
   the user back to editing with their typed rows intact — it does not refetch
   anything, so the rejection must be synchronous/immediate in the response,
   not a side-channel notification.
-- **Per-row rejection, not batch failure**: a duplicate `item_code` *within
-  the same submitted batch* is dropped into `rejectedItems`, and every other
-  row still gets written and returned in `acceptedItems`. Status becomes
-  `"partial"` (not an error) when `rejectedItems.length > 0`, `"success"`
-  otherwise.
+- **Duplicate item codes within one upload are merged, not rejected**
+  (`main-file.md` §5 rule 3). Rows in the submitted batch sharing an
+  `item_code` (or the name-based fallback key below) are combined into one
+  saved row: `quantity` and `total_item_price` are summed; `unit_count`,
+  `unit`, `item_price`, and `item_name` are kept from the first occurrence.
+  Each merge is reported in `mergedItems`, with `fieldsDisagreed: true` if
+  the kept fields didn't match (possible misread code). A merge alone keeps
+  `status: "success"` — so the frontend shows merges on the batch summary
+  (`BatchSummaryStep`, per page) and the next page's "Page N saved" banner,
+  not only on `ResultStep`, which a clean save skips.
+- **Per-row rejection, not batch failure**: an `item_code` that collides with
+  a row **already saved** on the delivery (typically from an earlier page) is
+  dropped into `rejectedItems`, and every other row still gets written and
+  returned in `acceptedItems`. Status becomes `"partial"` (not an error) when
+  `rejectedItems.length > 0`, `"success"` otherwise.
 - **Fallback dedupe key for code-less items**: when `item_code` is null/empty,
   the mock keys the duplicate check on `name:<lowercased trimmed item_name>`
   instead (§4's "open decision", option 1 — this has already been decided,

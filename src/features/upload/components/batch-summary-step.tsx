@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CreateDeliveryResult } from "@/features/deliveries/types";
+import { MergedItemsNotice } from "./merged-items-notice";
 
 export interface SavedPage {
   // Position within the batch (0-based), so the summary can label pages and
@@ -42,19 +43,27 @@ export function BatchSummaryStep({
             {totalRejected} row{totalRejected === 1 ? "" : "s"} rejected as duplicate item codes
           </p>
         ) : null}
+        <p className="text-xs text-muted-foreground">
+          Receipt has more pages? Upload the next page — its items are added to this delivery.
+        </p>
       </div>
 
       <ul className="flex w-full flex-col gap-1 text-left text-xs text-muted-foreground">
         {pages.map(({ index, result }) => (
-          <li key={index} className="flex justify-between gap-2 rounded-md border px-3 py-2">
-            <span>
-              {batchSize > 1 ? `Page ${index + 1} · ` : ""}
-              {result.delivery?.delivery_code}
-            </span>
-            <span>
-              {result.acceptedItems.length} item{result.acceptedItems.length === 1 ? "" : "s"} added
-              {result.rejectedItems.length > 0 ? `, ${result.rejectedItems.length} rejected` : ""}
-            </span>
+          <li key={index} className="flex flex-col gap-2 rounded-md border px-3 py-2">
+            <div className="flex justify-between gap-2">
+              <span>
+                {batchSize > 1 ? `Page ${index + 1} · ` : ""}
+                {result.delivery?.delivery_code}
+              </span>
+              <span>
+                {result.acceptedItems.length} item{result.acceptedItems.length === 1 ? "" : "s"} added
+                {result.rejectedItems.length > 0 ? `, ${result.rejectedItems.length} rejected` : ""}
+              </span>
+            </div>
+            {/* Clean saves auto-advance past the per-page result screen, so
+                this is where a page's merged rows are reported (#21). */}
+            {result.mergedItems.length > 0 ? <MergedItemsNotice items={result.mergedItems} /> : null}
           </li>
         ))}
       </ul>
