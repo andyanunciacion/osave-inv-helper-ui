@@ -1,7 +1,7 @@
 # Frontend — Left To Do
 
 Reference doc for what's left to finish the frontend. Last updated
-2026-10-07 (previous scans: 2026-09-25, 2026-09-16). Companion to
+2026-10-08 (previous scans: 2026-10-07, 2026-09-25, 2026-09-16). Companion to
 `AI_DOCS/main-file.md` (plan/domain rules) and `AI_DOCS/frontend-contract.md`
 (backend API shape as the frontend expects it). Re-verify against current
 code before trusting this — it's a point-in-time snapshot, not live state.
@@ -11,9 +11,17 @@ backend (`NEXT_PUBLIC_API_URL`, default `http://localhost:4000`) — the
 in-memory sample store and mock OCR were removed in #16/#19. Issue branches
 (`<n>-<slug>`) merge into `develop`.
 
-**In flight (2026-10-07):** #18 (generic slate/blue theme, `e399f54`) is
-committed and pushed on `18-change-theme-to-generic-inventory-system` but not
-yet merged into `develop` — open the PR.
+**In flight (2026-10-08):** #42 (merged-items notice after a clean save,
+`93154c5`) is committed on `42-merge-duplicate-notice-never-shows-after-a-clean-save`
+but not pushed. The remote branch was created from an older commit, so a
+plain push fast-forwards it. Then open the PR into `develop`. #18 and #40 are
+merged (PRs #39, #41).
+
+**Release dependency:** the server's `#15` (crossed-out Qty/UOM,
+`inferred` / `has_annotation` / `totals` on `/api/ocr`) is committed in
+`osave-inv-helper-server` but **not pushed or merged**, and this repo's #31
+(already on `develop`) depends on it. Ship them together. See the server's
+`AI_DOCS/backend-left-to-do.md` §1.
 
 Items 2–5 below were re-verified against code on 2026-10-07 and are all still
 open; nothing merged since 2026-09-25 (#31, #32, #35, #37) closed any of them.
@@ -86,14 +94,16 @@ Fixed during the pass: the #35 partial-batch screen's "Retry N failed" /
   browser that the hidden-tab case shows the wait message and resumes to
   results once the page is visible.
 
-- **A batch dead-ends when one page is already saved.** Confirming a page
-  that returns `duplicate_delivery` shows "Nothing new to save" with only
-  "Back to review" — that branch of `result-step.tsx` gets no
-  `continueLabel`/`onContinue`, unlike the other non-success results. Cancel
-  then calls `startOver()` (`upload-flow.tsx` `handleCancel`, nothing saved
-  yet), discarding the remaining pages that were already OCR'd (billed).
-  Repro: pick the three `13*.jfif` samples together, confirm page 1. Needs a
-  "Skip to next page" / "Continue to next page" on the duplicate result.
+- ~~**A batch dead-ends when one page is already saved.**~~ **Fixed
+  2026-10-08 (#44), unit-tested and checked in the browser at 500px with
+  the three `13*.jfif` samples (all three skipped as already saved).** The
+  `duplicate_delivery` and `store_mismatch` result screens now offer "Skip
+  to next page" / "Skip and finish" next to "Back to review" ("Upload
+  another" for a single photo). Saved/skipped bookkeeping moved out of
+  `upload-flow.tsx` into `use-upload-batch`. The summary lists skipped pages
+  and reads "Nothing new saved" when every page was skipped. Not seen live:
+  skipping a page between two saved ones, and the `store_mismatch` result
+  (the client-side check usually blocks Confirm first).
 
 ### Smaller issues
 
@@ -147,17 +157,33 @@ Follow-ups from that pass, also done 2026-10-07:
 
 ### Backend (for `osave-inv-helper-server`)
 
-- **Reconcile doesn't fill a blank Transaction date.** `/api/ocr/reconcile`
-  recovered page 2/3's store code from page 1 of the `14*` batch but left
-  their `delivery_date` blank, so staff had to type it on each page. Fill it
-  from sibling pages with the same Inv. Tran. No., the same way as the store
-  code (and flag it as inferred).
+These are tracked in the server's `AI_DOCS/backend-left-to-do.md`, last
+scanned 2026-10-08. The ones that touch this repo:
 
-- **Printed totals partly missed:** for `17.jpg` the OCR returned only
-  `total_value`; `total_box` and `total_items` came back blank although "Total
-  Box: 8 / Total Item/s: 8" is clearly printed. With only the value sum to
-  compare, a wrong Qty passes and the review still says "Matches the totals
+- **Reconcile doesn't fill a blank Transaction date** (server §3). Seen on
+  the `14*` batch: staff had to type the date on pages 2/3. The proposed
+  `delivery_date_inferred` flag would need the dashed inferred outline here,
+  like the store code.
+- **Reconcile doesn't cross-check `delivery_code`** (server §3). A page with
+  a misread Inv. Tran. No. saves as a second, bogus delivery. Needs a
+  contract decision (flag only, or also fill) and a review-screen warning.
+- **Printed totals partly missed** for `17.jpg` (server §3): only
+  `total_value` came back, so a wrong Qty still shows "Matches the totals
   printed on the receipt."
+- **Search and recent uploads silently stop at 1,000 item rows** (server
+  §2). Two full-size deliveries in a date range would drop rows and give a
+  wrong total. The fix is server-only, but "Load more" and the unified view
+  should be re-checked afterwards.
+- **A failed quantity save can still change the quantity** (server §2): the
+  PATCH updates first and writes history second, so a 500 from the history
+  insert leaves the new value saved but unaudited. `use-update-item-quantity`
+  shows it as failed. Refetching on error (invalidate on `onSettled`, not
+  only `onSuccess`) would at least show the real value.
+- **The two `frontend-contract.md` copies have drifted** (server §6). This
+  copy is missing the `/api/ocr/reconcile` section,
+  `DraftHeader.printout_datetime`, the full `totals` rules and all of §8
+  (quantity PATCH). The server's copy is missing this repo's newer §2
+  wording. Merge them once and copy the result to both repos.
 
 ### Still untested
 
@@ -258,10 +284,13 @@ soft-delete + edit log. Not required for MVP.
 
 ## 8. Auth
 
-`uploaded_by` has no real identity source — `frontend-contract.md` notes it's
-hardcoded to `"prototype-session"`, but deliveries saved on 2026-10-07 have
-`uploaded_by: null` (seen in `/api/deliveries/recent`), so either the
-frontend stopped sending it or the backend drops it — check which. If store staff get individual logins
+`uploaded_by` has no real identity source. Deliveries are saved with
+`uploaded_by: null` because **the frontend never sends it** (checked
+2026-10-08: no reference in `src/` outside `types/schema.ts` and test
+fixtures). The server stores the field when it's present, and
+`frontend-contract.md`'s "hardcoded to `prototype-session`" line is stale.
+The server's read/edit routes also aren't scoped to a store yet (server
+§4). If store staff get individual logins
 eventually, that's a `store-session`-adjacent feature not yet designed. The
 item history panel (#23) will show more useful "who changed this" info once
 this exists.
@@ -314,7 +343,7 @@ this exists.
   - #32: search hooks return a `status` (idle | loading | error | success)
     and `retry`; results page shows "Searching…" and a "Couldn't load
     results" alert with Try again instead of a false "No deliveries found".
-- **Theme (#18, pending merge):** company logo/red removed; neutral slate
+- **Theme (#18, merged via PR #39):** company logo/red removed; neutral slate
   with a muted blue accent, light/dark via `prefers-color-scheme`,
   "Inventory Helper" name. Also fixed the self-referencing `--font-sans`
   token that fell back to Times New Roman.

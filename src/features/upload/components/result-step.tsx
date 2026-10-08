@@ -15,12 +15,34 @@ interface ResultStepProps {
   // batch (upload-flow.tsx decides which).
   continueLabel: string;
   onContinue: () => void;
+  // When nothing was saved: pass over this page without saving it, so the
+  // rest of a batch (already OCR'd) isn't stranded — useUploadBatch's `skip`.
+  skipLabel: string;
+  onSkip: () => void;
 }
 
 // Thin: renders the outcome of useDeliveryDraft's confirm() — §6 flow B
 // step 5 calls for duplicates to be surfaced clearly, not as a silent
 // failure, whether it's the whole receipt or individual item rows.
-export function ResultStep({ result, onEditAgain, continueLabel, onContinue }: ResultStepProps) {
+export function ResultStep({
+  result,
+  onEditAgain,
+  continueLabel,
+  onContinue,
+  skipLabel,
+  onSkip,
+}: ResultStepProps) {
+  const notSavedActions = (
+    <div className="flex gap-2">
+      <Button type="button" variant="outline" onClick={onEditAgain}>
+        Back to review
+      </Button>
+      <Button type="button" onClick={onSkip}>
+        {skipLabel}
+      </Button>
+    </div>
+  );
+
   if (result.status === "store_mismatch") {
     return (
       <div className="flex flex-col items-center gap-4 py-6 text-center">
@@ -34,9 +56,7 @@ export function ResultStep({ result, onEditAgain, continueLabel, onContinue }: R
             receipt, or switch to the right store.
           </p>
         </div>
-        <Button type="button" onClick={onEditAgain}>
-          Back to review
-        </Button>
+        {notSavedActions}
       </div>
     );
   }
@@ -58,9 +78,7 @@ export function ResultStep({ result, onEditAgain, continueLabel, onContinue }: R
             delivery. Check the number against the receipt and try again.
           </p>
         </div>
-        <Button type="button" onClick={onEditAgain}>
-          Back to review
-        </Button>
+        {notSavedActions}
       </div>
     );
   }

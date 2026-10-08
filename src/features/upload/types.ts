@@ -4,7 +4,9 @@
 // and are parsed/validated against schema.ts's stricter types only at
 // confirm time (see useDeliveryDraft's `confirm`).
 
-export type UploadStage = "capture" | "processing" | "review" | "submitting" | "result";
+import type { CreateDeliveryResult } from "@/features/deliveries/types";
+
+export type UploadStage ="capture" | "processing" | "review" | "submitting" | "result";
 
 // Cells /api/ocr worked out instead of reading them — mostly Qty/UOM that
 // staff struck through while checking the delivery, recovered from the row's
@@ -54,4 +56,11 @@ export interface OcrResult {
   header: DraftHeader;
   items: DraftItem[];
   totals: ReceiptTotals;
+}
+
+export interface SavedPage {
+  // Position within the batch (0-based), so the summary can label pages and
+  // stay correct if the same page is recorded twice.
+  index: number;
+  result: CreateDeliveryResult;
 }
