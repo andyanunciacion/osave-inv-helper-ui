@@ -22,6 +22,7 @@ function group(overrides: Partial<DeliverySearchResultGroup> = {}): DeliverySear
       delivery_date: "2026-09-01",
       receipt_store_code: null,
       uploaded_by: null,
+      note: null,
       status: "confirmed",
       created_at: "2026-09-01T00:00:00.000Z",
     },

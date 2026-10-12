@@ -53,6 +53,7 @@ function successResult(overrides: Partial<CreateDeliveryResult> = {}): CreateDel
       delivery_date: "2026-09-01",
       receipt_store_code: "STORE1",
       uploaded_by: null,
+      note: null,
       status: "confirmed",
       created_at: "2026-09-01T00:00:00.000Z",
     },
