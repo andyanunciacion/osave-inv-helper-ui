@@ -2,11 +2,10 @@
 // multipart form data and never touches this client again once the request
 // resolves — only the parsed OcrResult comes back.
 
+import { backendFetch } from "@/lib/api-client";
 import type { DraftHeader, DraftItem, ReceiptTotals } from "../types";
 import { compressImage } from "./compress-image";
 import { normalizeImageFile } from "./normalize-image-file";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 // Mirrors the backend's multer limit on /api/ocr.
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -59,7 +58,7 @@ export async function runOcr(file: File, storeCode: string): Promise<OcrApiRespo
   formData.append("image", image);
   formData.append("store_code", storeCode);
 
-  const res = await fetch(`${API_BASE_URL}/api/ocr`, {
+  const res = await backendFetch("/api/ocr", {
     method: "POST",
     body: formData,
   });
@@ -89,7 +88,7 @@ export async function runOcrReconcile(
   storeCode: string,
   pages: DraftHeader[],
 ): Promise<OcrReconcilePage[]> {
-  const res = await fetch(`${API_BASE_URL}/api/ocr/reconcile`, {
+  const res = await backendFetch("/api/ocr/reconcile", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ store_code: storeCode, pages }),

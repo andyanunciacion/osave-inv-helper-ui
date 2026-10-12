@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import { hydrateRoot } from "react-dom/client";
+import { forgetStorePasscode } from "@/lib/store-session-storage";
 import { useRequireStoreSession } from "./use-require-store-session";
 import { useStoreSession } from "./use-store-session";
 
@@ -10,6 +11,11 @@ const replace = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
 }));
+
+function signIn() {
+  window.localStorage.setItem("osave.store_code", "ST01");
+  window.localStorage.setItem("osave.store_passcode", "secret1");
+}
 
 function Guarded() {
   const storeCode = useRequireStoreSession();
@@ -28,8 +34,8 @@ describe("useRequireStoreSession", () => {
     expect(replace).toHaveBeenCalledWith("/");
   });
 
-  it("does not redirect when a store code is set", () => {
-    window.localStorage.setItem("osave.store_code", "ST01");
+  it("does not redirect when a store code is signed in with its passcode", () => {
+    signIn();
 
     const { result } = renderHook(() => useRequireStoreSession());
 
@@ -37,8 +43,27 @@ describe("useRequireStoreSession", () => {
     expect(result.current).toBe("ST01");
   });
 
-  it("redirects once the store code is cleared", () => {
+  it("redirects when the store code has no passcode", () => {
     window.localStorage.setItem("osave.store_code", "ST01");
+
+    const { result } = renderHook(() => useRequireStoreSession());
+
+    expect(replace).toHaveBeenCalledWith("/");
+    expect(result.current).toBeNull();
+  });
+
+  it("redirects once the backend's refusal makes the passcode forgotten", () => {
+    signIn();
+    renderHook(() => useRequireStoreSession());
+    expect(replace).not.toHaveBeenCalled();
+
+    act(() => forgetStorePasscode());
+
+    expect(replace).toHaveBeenCalledWith("/");
+  });
+
+  it("redirects once the store code is cleared", () => {
+    signIn();
     const { result } = renderHook(() => {
       const storeCode = useRequireStoreSession();
       const { clearStoreCode } = useStoreSession();
@@ -62,7 +87,7 @@ describe("useRequireStoreSession", () => {
     const html = renderToString(<Guarded />);
     expect(html).toBe("");
 
-    window.localStorage.setItem("osave.store_code", "ST01");
+    signIn();
 
     const container = document.createElement("div");
     container.innerHTML = html;

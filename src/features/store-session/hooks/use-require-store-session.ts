@@ -21,9 +21,10 @@ function useHydrated(): boolean {
 }
 
 // AI_DOCS/main-file.md §6 flow A: every screen past the store-session step
-// is scoped to a store_code. Screens that need one call this instead of
-// useStoreSession directly, so a missing/cleared code redirects home
-// instead of silently querying/uploading against an empty code.
+// is scoped to a store_code signed in with its passcode. Screens that need one
+// call this instead of useStoreSession directly, so a missing/cleared code —
+// or a passcode the backend has since refused (backendFetch forgets it) —
+// redirects home instead of querying/uploading without access.
 //
 // useStoreSession's getServerSnapshot always returns null (no localStorage
 // on the server), so the very first client render after hydration renders
@@ -33,13 +34,14 @@ function useHydrated(): boolean {
 // snapshot mechanism) skips that transient render instead of bouncing to
 // "/" on every hard navigation/refresh even when a valid code is stored.
 export function useRequireStoreSession(): string | null {
-  const { storeCode } = useStoreSession();
+  const { storeCode, hasPasscode } = useStoreSession();
   const router = useRouter();
   const hydrated = useHydrated();
+  const signedIn = Boolean(storeCode) && hasPasscode;
 
   useEffect(() => {
-    if (hydrated && !storeCode) router.replace("/");
-  }, [hydrated, storeCode, router]);
+    if (hydrated && !signedIn) router.replace("/");
+  }, [hydrated, signedIn, router]);
 
-  return storeCode;
+  return signedIn ? storeCode : null;
 }
