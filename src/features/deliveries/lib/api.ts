@@ -5,13 +5,14 @@
 
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
-import type { DeliveryItemUpdate } from "@/types/schema";
+import type { Delivery, DeliveryItemUpdate } from "@/types/schema";
 import type {
   CreateDeliveryResult,
   DeliveryGroup,
   DeliverySearchResultGroup,
   NewDeliveryInput,
   UnifiedItemRow,
+  UpdateDeliveryNoteInput,
   UpdateItemQuantityInput,
   UpdateItemQuantityResult,
 } from "../types";
@@ -104,6 +105,24 @@ export async function updateItemQuantity(
     throw new Error(`Failed to update item quantity (status ${res.status})`);
   }
   return res.json() as Promise<UpdateItemQuantityResult>;
+}
+
+// frontend-contract.md §9: sets (or, with null, clears) the delivery's one
+// note — the server replaces whatever was there.
+export async function updateDeliveryNote(
+  deliveryCode: string,
+  input: UpdateDeliveryNoteInput,
+): Promise<Delivery> {
+  const res = await fetch(`${API_BASE_URL}/api/deliveries/${encodeURIComponent(deliveryCode)}/note`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to update delivery note (status ${res.status})`);
+  }
+  const { delivery } = (await res.json()) as { delivery: Delivery };
+  return delivery;
 }
 
 export async function fetchItemHistory(

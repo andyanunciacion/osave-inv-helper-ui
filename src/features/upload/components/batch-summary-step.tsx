@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DeliveryNoteForm } from "@/features/deliveries/components/delivery-note-form";
+import { batchSavedHeadline, morePagesHint, savedDeliveries } from "../lib/saved-deliveries";
 import type { SavedPage } from "../types";
 import { MergedItemsNotice } from "./merged-items-notice";
 
 // The single end screen of an upload: per-page breakdown plus totals. Pages
-// are saved as they're confirmed, so this only reports.
+// are saved as they're confirmed, so this only reports — apart from the
+// optional note per saved delivery, shown later in search results.
 export function BatchSummaryStep({
   pages,
   skippedPages,
@@ -25,6 +28,7 @@ export function BatchSummaryStep({
 }) {
   const totalItems = pages.reduce((sum, page) => sum + page.result.acceptedItems.length, 0);
   const totalRejected = pages.reduce((sum, page) => sum + page.result.rejectedItems.length, 0);
+  const deliveries = savedDeliveries(pages);
 
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">
@@ -36,7 +40,7 @@ export function BatchSummaryStep({
       <div className="flex flex-col gap-1">
         <p className="text-sm font-medium text-card-foreground">
           {pages.length > 0
-            ? `${pages.length} page${pages.length === 1 ? "" : "s"} saved with ${totalItems} item${totalItems === 1 ? "" : "s"}`
+            ? batchSavedHeadline(pages.length, totalItems, deliveries.length)
             : "Nothing new saved"}
         </p>
         {totalRejected > 0 ? (
@@ -51,9 +55,7 @@ export function BatchSummaryStep({
           </p>
         ) : null}
         {pages.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Receipt has more pages? Upload the next page — its items are added to this delivery.
-          </p>
+          <p className="text-xs text-muted-foreground">{morePagesHint(deliveries.length)}</p>
         ) : null}
       </div>
 
@@ -81,6 +83,10 @@ export function BatchSummaryStep({
           ))}
         </ul>
       ) : null}
+
+      {deliveries.map((delivery) => (
+        <DeliveryNoteForm key={delivery.delivery_code} delivery={delivery} />
+      ))}
 
       <div className="flex gap-2">
         <Button

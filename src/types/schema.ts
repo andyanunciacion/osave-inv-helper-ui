@@ -15,6 +15,9 @@ export interface Delivery {
   delivery_date: string;
   receipt_store_code: string | null;
   uploaded_by: string | null;
+  // Staff's free-text note, added on the upload's success screen — one per
+  // delivery, replaced on each save (frontend-contract.md §9).
+  note: string | null;
   status: DeliveryStatus;
   created_at: string;
 }

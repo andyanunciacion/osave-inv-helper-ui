@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Plus,
+  StickyNote,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DeliveryNoteForm } from "@/features/deliveries/components/delivery-note-form";
 import { parseLocalDateString } from "@/features/deliveries/lib/date-range";
 import type { DeliverySearchResultGroup } from "@/features/deliveries/types";
 import { usePaginatedGroups } from "../hooks/use-paginated-groups";
@@ -44,8 +51,16 @@ export function SearchResults({ groups }: SearchResultsProps) {
   );
 }
 
+// Shared by the saved-note row and the "Add note" row so both read as the
+// same tappable note strip. A 44px touch target: one 16px line of text-xs plus
+// py-3.5 (14px each side) is exactly min-h-11, so a single line sits centered,
+// while items-start keeps the icons on the first line of a longer note.
+const NOTE_ROW_CLASS =
+  "flex min-h-11 items-start gap-1.5 rounded-md bg-muted px-2.5 py-3.5 text-left text-xs text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted/70";
+
 function DeliveryGroupCard({ group }: { group: DeliverySearchResultGroup }) {
   const [expanded, setExpanded] = useState(group.autoExpand);
+  const [editingNote, setEditingNote] = useState(false);
   const { delivery, displayItems } = group;
 
   return (
@@ -65,11 +80,37 @@ function DeliveryGroupCard({ group }: { group: DeliverySearchResultGroup }) {
           {delivery.delivery_code}
         </span>
         <span className="shrink-0 text-xs text-muted-foreground">
-          {format(parseLocalDateString(delivery.delivery_date), "MMM d, yyyy")} ·{" "}
-          {displayItems.length} item
+          {format(parseLocalDateString(delivery.delivery_date), "MMM d, yyyy")}{" "}
+          · {displayItems.length} item
           {displayItems.length === 1 ? "" : "s"}
         </span>
       </button>
+      {/* A saved note shows even while collapsed — it's the staff's own remark
+          about the delivery as a whole, so it shouldn't hide behind the item
+          list — and tapping it edits it. "Add note" only appears once the
+          card is open, to keep a long result list compact. */}
+      {editingNote ? (
+        <DeliveryNoteForm
+          delivery={delivery}
+          onSaved={() => setEditingNote(false)}
+          onCancel={() => setEditingNote(false)}
+        />
+      ) : delivery.note ? (
+        <button type="button" onClick={() => setEditingNote(true)} className={NOTE_ROW_CLASS}>
+          <StickyNote className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+            <span className="sr-only">Edit note: </span>
+            {delivery.note}
+          </span>
+          <Pencil className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+        </button>
+      ) : expanded ? (
+        <button type="button" onClick={() => setEditingNote(true)} className={NOTE_ROW_CLASS}>
+          <StickyNote className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">Add note</span>
+          <Plus className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+        </button>
+      ) : null}
       {expanded ? <VirtualItemList items={displayItems} /> : null}
     </div>
   );

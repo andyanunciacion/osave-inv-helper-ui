@@ -100,3 +100,10 @@ export interface UpdateItemQuantityResult {
   item: DeliveryItem;
   update: DeliveryItemUpdate | null; // null when the submitted quantity matched the existing value
 }
+
+// frontend-contract.md §9 — store_code scopes the write so one store can't
+// edit another's delivery; a null note clears it.
+export interface UpdateDeliveryNoteInput {
+  store_code: string;
+  note: string | null;
+}

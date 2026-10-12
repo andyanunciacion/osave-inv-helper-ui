@@ -35,6 +35,7 @@ interface Delivery {
   delivery_date: string;        // "yyyy-MM-dd", NOT a timestamp — see §5 (timezones)
   receipt_store_code: string | null;
   uploaded_by: string | null;
+  note: string | null;          // staff's note from the upload success screen — see §9
   status: DeliveryStatus;
   created_at: string;
 }
@@ -391,3 +392,74 @@ shape identical — should not require changing anything in
 hook's current behavior (e.g. grouping/filtering in §3) is really a query
 shape that belongs in SQL/an RPC rather than client-side `.filter()`, that's
 a hook-internals change, still without touching call sites.
+
+---
+
+## 9. Write path — a delivery's note
+
+> (§8, quantity corrections, lives in the server repo's copy of this doc.)
+
+**Built on the server** (branch `19-add-delivery-note`, 2026-10-12) to the
+spec below, matching the frontend side (UI branch
+`49-add-note-on-the-success-page-of-uploading`). Saving only works once
+`supabase/migrations/20261012000000_add_delivery_note.sql` has been applied
+to the Supabase project.
+
+**Hook:** `useUpdateDeliveryNote()` → `updateNote(deliveryCode, input): Promise<Delivery>`
+(`features/deliveries/hooks/use-update-delivery-note.ts`), driven by
+`useDeliveryNote` (`features/deliveries/hooks/use-delivery-note.ts`) through
+`DeliveryNoteForm`, which is used in two places:
+- the upload's success screen (`BatchSummaryStep`) — one box per delivery the
+  batch saved to;
+- each grouped search-result card (§3, `search-results.tsx`) — the note
+  shows under the delivery code and above the item list, even while the
+  group is collapsed; tapping it opens the editor. An open card with no note
+  shows "Add note". So a note can be added or changed any time after upload.
+
+One note per delivery, **replaced** on every save (not appended). The box is
+pre-filled from `delivery.note` on the last `POST /api/deliveries` response of
+the batch, so a later upload of another page shows the note already saved.
+
+**Backend needs:**
+
+- Column: `alter table deliveries add column note text;` (nullable, no
+  default). New migration under `supabase/migrations/`, mirrored in
+  `schema.sql`.
+- `note` must come back on every `Delivery` the frontend reads — the
+  `create_delivery` RPC's returned `delivery` (both create and append paths),
+  `GET /api/deliveries/recent`, `GET /api/deliveries/:delivery_code`, and each
+  group's `delivery` in `GET /api/search`. As of 2026-10-12 all of these
+  already return the full row (`select("*")` in `deliveries.ts`/`search.ts`
+  line 199; `to_jsonb(v_delivery)` in `create_delivery`), so adding the
+  column is enough — just don't narrow any of them to an explicit column
+  list without `note`.
+- Route: **`PATCH /api/deliveries/:delivery_code/note`** — register it in
+  `deliveries.ts` alongside the item routes (it's more specific than the
+  bare `GET /:delivery_code`, and a different method, so order doesn't
+  conflict).
+
+  ```ts
+  // body
+  interface UpdateDeliveryNoteInput {
+    store_code: string;   // trim + uppercase, same as everywhere else
+    note: string | null;  // null (or blank after trim) clears the note
+  }
+  // 200
+  { delivery: Delivery } // the updated row, note included
+  ```
+
+  - Trim `note`; an empty string after trimming is stored as `null`.
+  - Max **500** characters after trimming → 400 `invalid_body` (the frontend
+    already caps input at 500, `DELIVERY_NOTE_MAX_LENGTH`).
+  - Update only where `delivery_code` **and** `store_code` match → 404
+    `not_found` otherwise, so one store can't write to another's delivery.
+    (Unlike the quantity PATCH in §8, which takes no `store_code` — see the
+    server's `backend-left-to-do.md` §4.)
+  - A single-row update, so a plain `.update().eq().eq().select().maybeSingle()`
+    is enough — no RPC needed.
+  - No audit/history row — unlike quantity corrections, the note is the
+    staff's own remark, not delivered data.
+  - The frontend treats any non-2xx as "couldn't save, try again" and keeps
+    the typed text; the response body's error shape isn't read.
+- Until the column exists the frontend reads a missing `note` as `null`, so
+  search and upload keep working; only saving a note fails.
