@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { OcrError } from "./api";
-import { checkPhotoFile, MAX_PHOTO_BYTES, toCaptureError } from "./capture-error";
+import { MAX_PHOTO_BYTES, OcrError } from "./api";
+import { checkPhotoFile, toCaptureError } from "./capture-error";
 
 const fileOf = (name: string, type: string, size = 1) =>
   new File([new Uint8Array(size)], name, { type });
@@ -21,15 +21,8 @@ describe("checkPhotoFile", () => {
     });
   });
 
-  it("rejects a photo over 10MB, without offering a retry", () => {
-    expect(checkPhotoFile(fileOf("big.jpg", "image/jpeg", MAX_PHOTO_BYTES + 1))).toMatchObject({
-      kind: "too_large",
-      retryable: false,
-    });
-  });
-
-  it("accepts a photo of exactly 10MB", () => {
-    expect(checkPhotoFile(fileOf("edge.jpg", "image/jpeg", MAX_PHOTO_BYTES))).toBeNull();
+  it("lets a photo over 10MB through — runOcr compresses it first", () => {
+    expect(checkPhotoFile(fileOf("big.jpg", "image/jpeg", MAX_PHOTO_BYTES + 1))).toBeNull();
   });
 });
 

@@ -8,6 +8,9 @@ import { normalizeImageFile } from "./normalize-image-file";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+// Mirrors the backend's multer limit on /api/ocr.
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
 // The backend never invents a localId (that's client-only, per
 // frontend-contract.md §6) — the caller adds one to each row.
 export interface OcrApiResponse {
@@ -41,9 +44,19 @@ interface OcrErrorBody {
 // `storeCode` is the session's store: the backend rejects (409) a receipt
 // addressed to a different store, so a receipt for store 1 can't be read into
 // store 2's records.
+//
+// The size limit is checked here, after compression, not on the picked file:
+// most photos over the limit shrink well under it, and only one that's still
+// too big is refused — without being sent, so it can't count against the OCR
+// rate limit.
 export async function runOcr(file: File, storeCode: string): Promise<OcrApiResponse> {
+  const image = await compressImage(normalizeImageFile(file));
+  if (image.size > MAX_PHOTO_BYTES) {
+    throw new OcrError("file_too_large", "Image must be 10MB or smaller");
+  }
+
   const formData = new FormData();
-  formData.append("image", await compressImage(normalizeImageFile(file)));
+  formData.append("image", image);
   formData.append("store_code", storeCode);
 
   const res = await fetch(`${API_BASE_URL}/api/ocr`, {

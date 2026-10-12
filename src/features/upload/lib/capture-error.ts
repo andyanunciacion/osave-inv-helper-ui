@@ -6,9 +6,6 @@
 import { OcrError } from "./api";
 import { normalizeImageFile } from "./normalize-image-file";
 
-// Mirrors the backend's multer limit on /api/ocr.
-export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
-
 // `store_mismatch`: the receipt is addressed to another store. `limit`: the
 // backend's OCR rate/daily cap was hit. `invalid_file` / `too_large`: the file
 // itself can't be sent. `network`: the request never got an answer.
@@ -43,7 +40,7 @@ const INVALID_FILE: CaptureError = {
 const TOO_LARGE: CaptureError = {
   kind: "too_large",
   title: "Photo too large",
-  message: "This photo is over 10MB. Retake it or pick a smaller copy.",
+  message: "This photo is still over 10MB after shrinking it. Retake it or pick a smaller copy.",
   retryable: false,
 };
 
@@ -75,13 +72,13 @@ const DAILY_LIMIT: CaptureError = {
   retryable: false,
 };
 
-// Catches what /api/ocr would reject before sending it, so a bad file never
-// makes the request or counts against the OCR rate limit. Same test the
-// backend applies: the part's content type must be image/* once JFIF is
-// relabelled.
+// Catches a file /api/ocr would reject as not an image before sending it, so
+// it never makes the request or counts against the OCR rate limit. Same test
+// the backend applies: the part's content type must be image/* once JFIF is
+// relabelled. Size isn't checked here — a large photo is compressed first,
+// and runOcr refuses it only if it's still too big.
 export function checkPhotoFile(file: File): CaptureError | null {
   if (!normalizeImageFile(file).type.startsWith("image/")) return INVALID_FILE;
-  if (file.size > MAX_PHOTO_BYTES) return TOO_LARGE;
   return null;
 }
 

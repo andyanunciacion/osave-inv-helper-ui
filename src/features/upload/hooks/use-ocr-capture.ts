@@ -190,8 +190,8 @@ export function useOcrCapture(): UseOcrCaptureResult {
     [finish, leaveProcessing],
   );
 
-  // Files that /api/ocr would reject (not an image, too large) are failed
-  // up front without being sent.
+  // Files that /api/ocr would reject as not an image are failed up front
+  // without being sent (a too-large photo is compressed first — runOcr).
   const captureFiles = useCallback(
     (files: File[], sessionStoreCode: string) => {
       if (files.length === 0) return;

@@ -1,6 +1,8 @@
 // Shrinks a receipt photo before it's sent to /api/ocr, but only when it has
-// to: a photo over `targetBytes` won't fit the 4.5MB request-body limit of
-// serverless hosts like Vercel.
+// to: the backend refuses images over 10MB (its multer limit). The backend
+// runs as one always-on server, not serverless functions, so that's the only
+// limit — a serverless host would cap the whole request near 4.5MB and need a
+// much lower target.
 //
 // Compression is a last resort because it changes what OCR reads. Tested on
 // real receipts, downscaling flipped cells under the diagonal date watermark
@@ -30,8 +32,9 @@ export interface CompressOptions {
 }
 
 export const DEFAULT_COMPRESS_OPTIONS: CompressOptions = {
-  // Under Vercel's 4.5MB body limit, with room for the multipart envelope.
-  targetBytes: 4 * 1024 * 1024,
+  // Under the backend's 10MB limit, with room to spare — high enough that
+  // the photos that work today are sent untouched.
+  targetBytes: 9 * 1024 * 1024,
   steps: [
     { maxEdge: Number.POSITIVE_INFINITY, quality: 0.85 },
     { maxEdge: 3200, quality: 0.85 },
