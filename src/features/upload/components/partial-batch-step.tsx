@@ -44,10 +44,12 @@ export function PartialBatchStep({
             <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="truncate text-sm font-medium text-card-foreground">{photo.fileName}</span>
-              <span className="text-xs text-muted-foreground">
-                {photo.error.message}
-                {photo.retryable ? "" : " — skipped, retrying won't help."}
-              </span>
+              <span className="text-xs text-muted-foreground">{photo.error.message}</span>
+              {photo.retryable ? null : (
+                <span className="text-xs text-muted-foreground italic">
+                  Skipped — retrying won&apos;t help.
+                </span>
+              )}
             </div>
           </li>
         ))}

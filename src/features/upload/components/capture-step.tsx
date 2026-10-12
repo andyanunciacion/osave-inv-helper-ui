@@ -60,9 +60,7 @@ export function CaptureStep({ status, error, progress, onFilesSelected }: Captur
       {status === "error" && error ? (
         <Alert variant="destructive" className="text-left">
           <AlertTriangle />
-          <AlertTitle>
-            {error.kind === "store_mismatch" ? "Wrong store" : "Couldn't read that receipt"}
-          </AlertTitle>
+          <AlertTitle>{error.title}</AlertTitle>
           <AlertDescription>
             {error.fileName ? `${error.fileName}: ` : ""}
             {error.kind === "store_mismatch"

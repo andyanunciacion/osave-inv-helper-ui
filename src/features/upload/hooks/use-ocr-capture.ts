@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from "react";
-import { OcrError, runOcr, runOcrReconcile, type OcrApiResponse } from "../lib/api";
+import { runOcr, runOcrReconcile, type OcrApiResponse } from "../lib/api";
+import { checkPhotoFile, toCaptureError, type CaptureError } from "../lib/capture-error";
 import type { OcrResult } from "../types";
+
+export type { CaptureError, CaptureErrorKind } from "../lib/capture-error";
 
 // §6 flow B steps 1-4 / §8 background upload: owns the capture → processing
 // transition, for one photo or a multi-photo batch alike (a single capture
@@ -10,20 +13,6 @@ import type { OcrResult } from "../types";
 // pauses so staff can retry just the failed ones or continue with what was
 // read — the read pages are kept either way (each was a billed OCR call).
 export type CaptureStatus = "idle" | "processing" | "partial" | "done" | "error";
-
-// `store_mismatch`: the receipt is addressed to another store — retaking the
-// same photo won't help. `limit`: the backend's OCR rate/daily cap was hit.
-// `failed`: anything else (unreadable photo, network, server error).
-export type CaptureErrorKind = "store_mismatch" | "limit" | "failed";
-
-export interface CaptureError {
-  kind: CaptureErrorKind;
-  message: string;
-  // Which file in a multi-select batch this came from, so the capture
-  // screen can name it rather than leaving the user guessing which of
-  // several selected photos failed.
-  fileName?: string;
-}
 
 // One page of a batch, ready for review: the OCR result plus whether its
 // store code was filled in by /api/ocr/reconcile (not directly OCR'd), so
@@ -37,7 +26,7 @@ export interface BatchPage {
 export interface FailedPhoto {
   fileName: string;
   error: CaptureError;
-  // A receipt addressed to another store reads the same on a second try.
+  // e.g. a receipt addressed to another store reads the same on a second try.
   retryable: boolean;
 }
 
@@ -81,13 +70,6 @@ interface PhotoOutcome {
   error: CaptureError | null;
 }
 
-const isRetryable = (error: CaptureError): boolean => error.kind !== "store_mismatch";
-
-const GENERIC_ERROR: CaptureError = {
-  kind: "failed",
-  message: "Couldn't read that receipt. Try again.",
-};
-
 const NO_TOTALS = { total_pcs: "", total_box: "", total_items: "", total_value: "" };
 
 // The `??` defaults keep the review screen working against a backend that
@@ -103,18 +85,6 @@ function withLocalIds(result: OcrApiResponse): OcrResult {
       localId: crypto.randomUUID(),
     })),
   };
-}
-
-export function toCaptureError(err: unknown): CaptureError {
-  if (!(err instanceof OcrError)) return GENERIC_ERROR;
-
-  if (err.code === "store_mismatch") {
-    return { kind: "store_mismatch", message: err.message };
-  }
-  if (err.code === "rate_limited" || err.code === "daily_limit_reached") {
-    return { kind: "limit", message: err.message };
-  }
-  return GENERIC_ERROR;
 }
 
 function toOutcome(file: File, settled: PromiseSettledResult<OcrApiResponse>): PhotoOutcome {
@@ -185,8 +155,18 @@ export function useOcrCapture(): UseOcrCaptureResult {
       );
       setCurrentIndex(0);
       leaveProcessing("done");
-    } catch {
-      setError({ kind: "failed", message: "Couldn't verify store codes across the batch. Try again." });
+    } catch (err) {
+      const mapped = toCaptureError(err);
+      setError(
+        mapped.kind === "network"
+          ? mapped
+          : {
+              kind: "failed",
+              title: "Couldn't check the batch",
+              message: "Couldn't verify store codes across the batch. Try again.",
+              retryable: true,
+            },
+      );
       leaveProcessing("error");
     }
   }, [leaveProcessing]);
@@ -210,23 +190,36 @@ export function useOcrCapture(): UseOcrCaptureResult {
     [finish, leaveProcessing],
   );
 
+  // Files that /api/ocr would reject (not an image, too large) are failed
+  // up front without being sent.
   const captureFiles = useCallback(
     (files: File[], sessionStoreCode: string) => {
       if (files.length === 0) return;
       storeCodeRef.current = sessionStoreCode;
-      setStatus("processing");
       setError(null);
 
+      const rejections = files.map(checkPhotoFile);
+      const toSend = files.filter((_, i) => !rejections[i]);
+      if (toSend.length > 0) setStatus("processing");
+
       void (async () => {
-        const settled = await readAll(files);
-        await settle(files.map((file, i) => toOutcome(file, settled[i])));
+        const settled = await readAll(toSend);
+        let sent = 0;
+        await settle(
+          files.map((file, i) => {
+            const rejection = rejections[i];
+            return rejection
+              ? { file, result: null, error: { ...rejection, fileName: file.name } }
+              : toOutcome(file, settled[sent++]);
+          }),
+        );
       })();
     },
     [readAll, settle],
   );
 
   const retryFailed = useCallback(() => {
-    const toRetry = outcomes.filter((o) => o.error && isRetryable(o.error));
+    const toRetry = outcomes.filter((o) => o.error?.retryable);
     if (toRetry.length === 0) return;
     setStatus("processing");
 
@@ -262,7 +255,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
   }, []);
 
   const failedPhotos: FailedPhoto[] = outcomes.flatMap((o) =>
-    o.error ? [{ fileName: o.file.name, error: o.error, retryable: isRetryable(o.error) }] : [],
+    o.error ? [{ fileName: o.file.name, error: o.error, retryable: o.error.retryable }] : [],
   );
 
   return {
