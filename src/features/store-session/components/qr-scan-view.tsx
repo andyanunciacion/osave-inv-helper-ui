@@ -10,17 +10,19 @@ import { useStoreSession } from "../hooks/use-store-session";
 import { useQrScanner } from "../hooks/use-qr-scanner";
 
 // Thin: local file-input ref only. Scan lifecycle + decode logic live in
-// useQrScanner; session persistence lives in useStoreSession.
+// useQrScanner; session persistence lives in useStoreSession. The QR code
+// only carries the store code, so a scan fills it in and goes back to the
+// store screen for the passcode.
 export function QrScanView() {
   const router = useRouter();
-  const { setStoreCode } = useStoreSession();
+  const { chooseStore } = useStoreSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { videoRef, status, errorMessage, startCamera, stopCamera, decodeImageFile } =
     useQrScanner({
       onDecode: (code) => {
-        setStoreCode(code);
-        router.push("/search");
+        chooseStore(code);
+        router.push("/");
       },
     });
 

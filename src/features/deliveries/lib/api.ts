@@ -5,6 +5,7 @@
 
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
+import { backendFetch } from "@/lib/api-client";
 import type { Delivery, DeliveryItemUpdate } from "@/types/schema";
 import type {
   CreateDeliveryResult,
@@ -18,8 +19,6 @@ import type {
 } from "../types";
 import { DeliveryRequestError } from "./request-error";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
 // The backend paginates (grouped: 15/page, unified: 50/page by default) to
 // bound any single response, but the frontend's own pagination
 // (use-paginated-groups.ts) and virtualization (virtual-item-list.tsx)
@@ -28,7 +27,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const MAX_PAGE_LIMIT = 200;
 
 async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`);
+  const res = await backendFetch(path);
   if (!res.ok) {
     throw new Error(`Request to ${path} failed with status ${res.status}`);
   }
@@ -45,7 +44,7 @@ function rangeParams(range: DateRange | undefined): Record<string, string> {
 }
 
 export async function createDeliveryRequest(input: NewDeliveryInput): Promise<CreateDeliveryResult> {
-  const res = await fetch(`${API_BASE_URL}/api/deliveries`, {
+  const res = await backendFetch("/api/deliveries", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -93,8 +92,8 @@ export async function updateItemQuantity(
   itemId: string,
   input: UpdateItemQuantityInput,
 ): Promise<UpdateItemQuantityResult> {
-  const res = await fetch(
-    `${API_BASE_URL}/api/deliveries/${encodeURIComponent(deliveryCode)}/items/${encodeURIComponent(itemId)}`,
+  const res = await backendFetch(
+    `/api/deliveries/${encodeURIComponent(deliveryCode)}/items/${encodeURIComponent(itemId)}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -113,7 +112,7 @@ export async function updateDeliveryNote(
   deliveryCode: string,
   input: UpdateDeliveryNoteInput,
 ): Promise<Delivery> {
-  const res = await fetch(`${API_BASE_URL}/api/deliveries/${encodeURIComponent(deliveryCode)}/note`, {
+  const res = await backendFetch(`/api/deliveries/${encodeURIComponent(deliveryCode)}/note`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),

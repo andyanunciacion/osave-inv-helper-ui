@@ -285,11 +285,15 @@ soft-delete + edit log. Not required for MVP.
 2026-10-08: no reference in `src/` outside `types/schema.ts` and test
 fixtures). The server stores the field when it's present, and
 `frontend-contract.md`'s "hardcoded to `prototype-session`" line is stale.
-The server's read/edit routes also aren't scoped to a store yet (server
-§4). If store staff get individual logins
-eventually, that's a `store-session`-adjacent feature not yet designed. The
-item history panel (#23) will show more useful "who changed this" info once
-this exists.
+Access is per store, not per person: each store has one staff passcode
+(`frontend-contract.md` §10), so there's still no identity to put in
+`uploaded_by`. If store staff get individual logins eventually, that
+replaces the passcode step in `store-session`. The item history panel (#23)
+will show more useful "who changed this" info once this exists.
+
+The passcode is kept in localStorage so staff don't retype it, so anyone
+holding an unlocked phone with the app has that store's access. There's no
+"sign out" button yet — choosing another store is the only way to drop it.
 
 ---
 
@@ -300,6 +304,11 @@ this exists.
   (`RequireStoreSession` / `use-require-store-session`) blocking `/search`
   and `/upload` without a store code. #25 fixed the guard redirecting to `/`
   on hard refresh/direct URL load (it now waits for hydration).
+- **Store passcode** (`frontend-contract.md` §10): the store screen asks for
+  the store's passcode and checks it with the backend before saving it; every
+  backend call goes through `backendFetch` (`src/lib/api-client.ts`), which
+  sends both and forgets a refused passcode, so the guard sends staff back
+  to re-enter it. A QR scan fills in only the store code.
 - **Backend wiring (#16):** sample store removed; `features/deliveries/lib/api.ts`
   and `features/upload/lib/api.ts` call the real backend through TanStack
   Query hooks.

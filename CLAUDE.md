@@ -50,6 +50,8 @@ Reference example: `src/features/store-session/hooks/use-store-session.ts` (logi
 
 Use **TanStack Query** for anything backed by Supabase (queries, mutations, realtime-triggered invalidation) — don't hand-roll `useState`/`useEffect` data fetching. `QueryClientProvider` is set up in `src/app/providers.tsx`. A feature's data hooks (e.g. `use-delivery-search`) wrap `useQuery`/`useMutation` and expose a small, feature-specific return shape — don't leak raw TanStack Query objects (`UseQueryResult`, etc.) into components.
 
+Every backend call goes through `backendFetch` (`src/lib/api-client.ts`), never a bare `fetch`: it adds the store code + passcode headers every `/api` route requires, and forgets a refused passcode so the store-session guard asks for it again (`AI_DOCS/frontend-contract.md` §10). The one exception is checking a passcode *before* it's saved (`features/store-session/lib/api.ts`), which must not touch the saved session.
+
 ## Testing
 
 Hooks that contain non-trivial logic (branching, validation, anything beyond a passthrough) get a Vitest + React Testing Library test colocated as `<hook-name>.test.ts` next to the hook, using `renderHook`. Pure UI components generally don't need their own tests unless they contain real conditional rendering logic worth locking down.
