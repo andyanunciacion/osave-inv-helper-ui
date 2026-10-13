@@ -1,0 +1,23 @@
+# Lint, test and build on every PR and on pushes to the long-lived branches.
+# Vercel deploys on its own; this only catches a broken build before it gets
+# merged into develop/production.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, production]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

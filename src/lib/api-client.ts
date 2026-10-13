@@ -1,6 +1,16 @@
 import { forgetStorePasscode, readStoreCode, readStorePasscode } from "./store-session-storage";
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// NEXT_PUBLIC_API_URL is pasted into the host's settings by hand, so a blank
+// value falls back to the local server and a trailing slash is dropped —
+// "https://api.example.com/" + "/api/..." would be a "//api" path the backend
+// doesn't route. Next.js inlines the value at build time: changing it on the
+// host needs a redeploy.
+export function resolveApiBaseUrl(raw: string | undefined): string {
+  const trimmed = raw?.trim().replace(/\/+$/, "");
+  return trimmed || "http://localhost:4000";
+}
+
+export const API_BASE_URL = resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
 
 // frontend-contract.md §10: every /api request is signed in to one store with
 // these two headers.
