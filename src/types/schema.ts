@@ -15,6 +15,9 @@ export interface Delivery {
   delivery_date: string;
   receipt_store_code: string | null;
   uploaded_by: string | null;
+  // Staff's free-text note, added on the upload's success screen — one per
+  // delivery, replaced on each save (frontend-contract.md §9).
+  note: string | null;
   status: DeliveryStatus;
   created_at: string;
 }
@@ -27,10 +30,25 @@ export interface DeliveryItem {
   store_code: string;
   item_code: string | null;
   item_name: string;
-  quantity: number | null;
+  unit_count: number | null; // receipt's "Unit/Box" — pieces per box
+  quantity: number | null; // receipt's "Qty"
   unit: ItemUnit | null;
   item_price: number | null;
   total_item_price: number | null;
   raw_ocr_text: string | null;
+  created_at: string;
+}
+
+// One row per quantity correction made to a DeliveryItem after it was
+// confirmed (frontend-contract.md §8) — the audit trail behind
+// PATCH /api/deliveries/:delivery_code/items/:item_id.
+export interface DeliveryItemUpdate {
+  id: string;
+  item_id: string;
+  delivery_code: string;
+  store_code: string;
+  previous_quantity: number | null;
+  new_quantity: number;
+  reason: string | null;
   created_at: string;
 }

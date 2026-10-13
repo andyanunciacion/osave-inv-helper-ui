@@ -1,0 +1,514 @@
+# Frontend Contract (as built)
+
+Companion to `AI_DOCS/main-file.md` (the plan/domain-rules doc). That doc says
+*what the rules are*; this doc says *what shape the frontend already expects
+from a backend*, because the frontend was prototyped end-to-end against an
+in-memory mock (`features/deliveries/lib/sample-store.ts`) before Supabase
+existed. The data hooks below were deliberately kept stable at their public
+boundary so that swapping the mock for real Supabase/TanStack Query calls
+shouldn't require touching `features/upload` or `features/search` call
+sites — this doc is that boundary, written down.
+
+As of 2026-09-13. Re-check against the hook source before treating any
+signature here as current — it's the kind of thing that drifts.
+
+---
+
+## 1. Persisted row shapes (`src/types/schema.ts`)
+
+These mirror §4 of the plan doc and should map 1:1 to the eventual Postgres
+tables:
+
+```ts
+interface Store {
+  store_code: string;
+  name: string;
+  created_at: string; // ISO timestamp
+}
+
+type DeliveryStatus = "processing" | "confirmed" | "failed";
+
+interface Delivery {
+  delivery_code: string;
+  store_code: string;
+  warehouse_code: string | null;
+  delivery_date: string;        // "yyyy-MM-dd", NOT a timestamp — see §5 (timezones)
+  receipt_store_code: string | null;
+  uploaded_by: string | null;
+  note: string | null;          // staff's note from the upload success screen — see §9
+  status: DeliveryStatus;
+  created_at: string;
+}
+
+type ItemUnit = "BOX" | "PIECE";
+
+interface DeliveryItem {
+  id: string;                   // uuid
+  delivery_code: string;
+  store_code: string;           // denormalized, per §4
+  item_code: string | null;
+  item_name: string;
+  unit_count: number | null;    // receipt's "Unit/Box" (pieces per box)
+  quantity: number | null;      // receipt's "Qty"
+  unit: ItemUnit | null;
+  item_price: number | null;
+  total_item_price: number | null;
+  raw_ocr_text: string | null;
+  created_at: string;
+}
+```
+
+`store_code` is always normalized client-side to **trimmed, uppercased**
+before it's used for scoping or storage (`use-store-session.ts`,
+`sample-store.ts`'s `normalizeStoreCode`). The backend should apply the same
+normalization (or a case-insensitive `citext`/unique index) so a client bug
+or an inconsistently-cased QR code can't silently fork a store's data across
+two rows.
+
+---
+
+## 2. Write path — creating a delivery
+
+**Hook:** `useCreateDelivery()` → `submitDelivery(input: NewDeliveryInput): CreateDeliveryResult`
+(`features/deliveries/hooks/use-create-delivery.ts`)
+
+Called once, from the review screen's `confirm()` in
+`useDeliveryDraft` (`features/upload/hooks/use-delivery-draft.ts`), after the
+user has edited the OCR'd draft. This is a single call carrying the whole
+receipt (header + all item rows) — not one call per item.
+
+```ts
+interface NewDeliveryItemInput {
+  item_code: string | null;
+  item_name: string;
+  unit_count: number | null;
+  quantity: number | null;
+  unit: ItemUnit | null;
+  item_price: number | null;
+  total_item_price: number | null;
+}
+
+interface NewDeliveryInput {
+  delivery_code: string;
+  store_code: string;
+  warehouse_code: string | null;
+  delivery_date: string;
+  receipt_store_code: string;     // required, non-empty — see store mismatch below
+  items: NewDeliveryItemInput[];
+}
+```
+
+**Response** — the mock enforces §5 rules 2/3/5 itself; the real backend
+needs to reproduce this exact result shape, not just the constraint:
+
+```ts
+type CreateDeliveryStatus = "success" | "duplicate_delivery" | "partial" | "store_mismatch";
+
+interface RejectedItem {
+  item_code: string | null;
+  item_name: string;
+  reason: "duplicate_item_code";
+}
+
+interface MergedItem {
+  item_code: string | null;
+  item_name: string;
+  mergedCount: number;     // how many submitted rows were combined into this one (>= 2)
+  fieldsDisagreed: boolean; // unit/unit_count/item_price/item_name differed between the merged rows
+}
+
+interface CreateDeliveryResult {
+  status: CreateDeliveryStatus;
+  delivery: Delivery | null;      // null on "duplicate_delivery" and "store_mismatch"
+  acceptedItems: DeliveryItem[];
+  rejectedItems: RejectedItem[];
+  mergedItems: MergedItem[];      // always present, [] when nothing was merged
+}
+```
+
+Behavior the review screen depends on:
+- **Multi-page receipts**: every photographed page of one receipt prints the
+  same `delivery_code` ("Page 10 of 12"). If `delivery_code` already exists
+  **for the same `store_code`**, the submitted items are appended to that
+  delivery (`delivery` in the response is the existing row; per-row
+  duplicates still go to `rejectedItems`).
+- **Whole-receipt rejection**: `status: "duplicate_delivery"`, `delivery:
+  null`, both item arrays empty, nothing written — when `delivery_code`
+  already exists under a **different** store, or when it exists for this
+  store and *every* submitted item was a duplicate (the page was already
+  uploaded). The UI (`use-delivery-draft.ts`'s `editAgain()`) sends
+  the user back to editing with their typed rows intact — it does not refetch
+  anything, so the rejection must be synchronous/immediate in the response,
+  not a side-channel notification.
+- **Duplicate item codes within one upload are merged, not rejected**
+  (`main-file.md` §5 rule 3). Rows in the submitted batch sharing an
+  `item_code` (or the name-based fallback key below) are combined into one
+  saved row: `quantity` and `total_item_price` are summed; `unit_count`,
+  `unit`, `item_price`, and `item_name` are kept from the first occurrence.
+  Each merge is reported in `mergedItems`, with `fieldsDisagreed: true` if
+  the kept fields didn't match (possible misread code). A merge alone keeps
+  `status: "success"` — so the frontend shows merges on the batch summary
+  (`BatchSummaryStep`, per page) and the next page's "Page N saved" banner,
+  not only on `ResultStep`, which a clean save skips.
+- **Per-row rejection, not batch failure**: an `item_code` that collides with
+  a row **already saved** on the delivery (typically from an earlier page) is
+  dropped into `rejectedItems`, and every other row still gets written and
+  returned in `acceptedItems`. Status becomes `"partial"` (not an error) when
+  `rejectedItems.length > 0`, `"success"` otherwise.
+- **Fallback dedupe key for code-less items**: when `item_code` is null/empty,
+  the mock keys the duplicate check on `name:<lowercased trimmed item_name>`
+  instead (§4's "open decision", option 1 — this has already been decided,
+  not left open). The backend's uniqueness handling needs an equivalent
+  fallback (e.g. a generated slug column) since a plain
+  `unique(delivery_code, item_code)` constraint can't see name-only rows.
+- Rows with an empty/blank `item_name` are filtered out client-side before
+  the call is even made (see `confirm()`) — the backend doesn't need to
+  handle "empty item" as its own case.
+- **Store mismatch is now blocked server-side** (`main-file.md` §5 rule 6,
+  changed from the earlier warn-only behavior). `receipt_store_code` is now
+  **required and non-empty** (400 `invalid_body` otherwise — manual entry
+  must include it too). If it (after trim + uppercase) differs from
+  `store_code`, the response is `status: "store_mismatch"`, `delivery: null`,
+  both item arrays empty, HTTP 200, nothing written — same shape/convention
+  as `duplicate_delivery`.
+  The frontend also hard-blocks it up front (`storeMismatch` in
+  `useDeliveryDraft` disables Confirm, and `/api/ocr` rejects at scan time),
+  but the server no longer relies on that.
+- `unit_count` (receipt's "Unit/Box") is a new optional numeric field on each
+  item, alongside `quantity` (now the receipt's "Qty" column).
+
+---
+
+## 3. Read path — search
+
+**Hook:** `useDeliverySearch({ storeCode, query, range })` →
+`{ groups: DeliverySearchResultGroup[], hasActiveFilters: boolean }`
+(`features/deliveries/hooks/use-delivery-search.ts`)
+
+- Returns `{ groups: [], hasActiveFilters: false }` when both `query` is
+  empty and `range` is unset — the frontend never asks for "everything",
+  so the backend query doesn't need an unbounded/no-filter path from this
+  hook (see §4 for the one place that does browse unfiltered).
+- `query` matches (case-insensitive, substring) against `item_code`,
+  `item_name`, and `delivery_code` — matching §6's free-text spec.
+- `range` filters on `deliveries.delivery_date`, inclusive, compared as
+  **local calendar dates**, not UTC — see §5 below, this is a real bug class
+  the frontend already hit once.
+- **Grouping/display logic below is currently computed client-side** over
+  full delivery+item rows. For an API that returns already-paginated data,
+  this logic needs to move server-side (see "porting note" at the end):
+  - Exact match on `delivery_code` (case-insensitive, full string): return
+    *every* item for that delivery, and mark it `autoExpand: true`.
+  - Any other match (delivery-code fragment, or item name/code hit): return
+    only the item rows that matched, `autoExpand: false`. A delivery can
+    have 50-80 items — the UI is relying on the backend/hook to not hand
+    back the whole receipt for a one-item hit.
+  - Displayed items within a group are sorted by `item_code`.
+  - The **groups list itself** paginates in pages of 15
+    (`use-paginated-groups.ts`, `DEFAULT_PAGE_SIZE = 15`) — a broad query
+    can match many deliveries.
+
+```ts
+interface DeliveryGroup {
+  delivery: Delivery;
+  items: DeliveryItem[];
+}
+
+interface DeliverySearchResultGroup extends DeliveryGroup {
+  displayItems: DeliveryItem[]; // filtered/sorted subset, see above
+  autoExpand: boolean;
+}
+```
+
+**Hook:** `useUnifiedItemSearch({ storeCode, range })` →
+`{ items: UnifiedItemRow[] }` (`features/deliveries/hooks/use-unified-item-search.ts`)
+
+Used instead of `useDeliverySearch` specifically when the query text is
+empty and only a date range is set (§6: "date-only search is usually 'what
+came in that day'"). Returns a flat, ungrouped list of items across every
+delivery in range, each item still carrying its own `delivery_code` and
+(added) `delivery_date`, sorted by date desc then `item_code`. This is a
+materially different query shape from the grouped search above — a real
+API needs both, selected by the same "is there text?" branch the frontend
+uses, not just one endpoint with grouping as a client-side afterthought.
+
+```ts
+interface UnifiedItemRow extends DeliveryItem {
+  delivery_date: string;
+}
+```
+
+---
+
+## 4. Read path — recent/browse
+
+**Hook:** `useRecentDeliveries(storeCode, limit = 5)` →
+`{ groups: DeliveryGroup[] }` (`features/deliveries/hooks/use-recent-deliveries.ts`)
+
+Store-scoped, **unfiltered**, most-recent-first (`created_at` desc), capped
+at `limit`. Backs the "recent uploads" quick-select bar on the search
+screen. This is the one place the frontend does want an unfiltered/browse
+query — separate from search, don't conflate the two into one endpoint with
+optional filters if it makes the "recent, capped, no filters" case awkward.
+
+---
+
+## 5. Known correctness traps already hit while building the frontend
+
+- **Date-only strings and timezones**: `delivery_date` is a plain
+  `"yyyy-MM-dd"` string, deliberately not a timestamp. Parsing it with
+  `new Date(str)` / `parseISO` treats it as UTC midnight, which shifts a
+  calendar day in timezones ahead of UTC (this app is PH-based, UTC+8) —
+  this was a real bug, fixed client-side in
+  `features/deliveries/lib/date-range.ts` /
+  `features/search/lib/search-params.ts` by parsing against a local
+  reference date instead of relying on UTC-based parsing. Whatever the
+  backend uses for date filtering (Postgres `date` type + range query)
+  should be timezone-agnostic by construction, but if any date arithmetic
+  happens in application code, use the same local-date approach rather than
+  naive `Date` parsing.
+- `sample-store.ts`'s own seed-data generator still has this bug
+  (`.toISOString().slice(0,10)`) — harmless there since it only affects
+  which day cosmetic demo data lands on, but don't copy that line as a
+  reference for real date generation.
+- **Qty × Unit/Box × price ≈ total is a soft check, not a constraint**: §4's
+  sanity check (`hasPriceMismatch` in
+  `features/deliveries/lib/format.ts`) is purely a UI flag on the review
+  screen — it does not block submission and the backend doesn't need to
+  validate or reject on it. `total_item_price` is stored exactly as
+  extracted/edited, never recomputed.
+
+---
+
+## 6. Not yet real / explicitly deferred
+
+Don't treat these as "backend needs to support this on day one" — they were
+deliberately mocked or postponed:
+
+- **OCR**: `features/upload/lib/mock-ocr.ts` fabricates an `OcrResult`
+  (header + item rows) from a couple of canned templates after a ~1.2s
+  delay; the photo file is never inspected. The real contract is §7 of the
+  plan doc (a proxy endpoint that accepts an image and returns this same
+  `OcrResult` shape) — `OcrResult`'s shape below is what the review screen
+  (`useDeliveryDraft`) already expects as input, so the real OCR proxy
+  should return exactly this:
+
+  ```ts
+  interface DraftHeader {
+    delivery_code: string;
+    warehouse_code: string;
+    delivery_date: string;      // "yyyy-MM-dd"
+    receipt_store_code: string;
+  }
+
+  interface DraftItem {
+    localId: string;            // client-generated, not persisted
+    item_code: string;
+    item_name: string;
+    unit_count: string;         // "Unit/Box"
+    quantity: string;           // "Qty" — note: strings, for controlled-input editing
+    unit: string;
+    item_price: string;
+    total_item_price: string;
+  }
+
+  interface OcrResult {
+    header: DraftHeader;
+    items: DraftItem[];
+  }
+  ```
+
+  All fields are strings (including numeric ones) because they're bound
+  directly to editable text inputs on the review screen and only parsed
+  back to `NewDeliveryInput`'s numeric/typed fields at confirm time
+  (`toNumberOrNull`/`toItemUnitOrNull` in `use-delivery-draft.ts`). An OCR
+  proxy that returns numbers instead of strings would need an adapter, not
+  a hook change.
+
+  **As built — `POST /api/ocr`** (`multipart/form-data`):
+  - Fields: `image` (file, `image/*`, ≤ 10MB) and **`store_code`** (text, the
+    session's store; required, normalized trim + uppercase).
+  - 200 → `{ header, items }` as above, minus `localId` (client-generated).
+    Numbers come back as plain strings with thousands separators and `$`
+    stripped (`"1776.00"`, not `"1,776.00"`), so they parse directly. A field
+    the OCR couldn't read is `""` — including individual cells inside a row
+    (photographed receipts routinely lose a few), so the review screen must
+    let the user fill blanks. `header.delivery_date` is `yyyy-MM-dd`;
+    `header.warehouse_code` is the whole "From:" value (e.g. `"BUN DC"`);
+    `header.receipt_store_code` is the first number of the "To:" line.
+  - **409** `{ error: "store_mismatch", message, store_code,
+    receipt_store_code }` when the receipt's "To" store isn't `store_code`
+    (see `main-file.md` §5 rule 6). Not returned if the "To" code is
+    unreadable — `receipt_store_code` is just `""` in a 200.
+  - 400 `missing_image` / `invalid_file_type` / `invalid_body` /
+    `file_too_large`; 429 `rate_limited` / `daily_limit_reached`; 502
+    `ocr_failed`.
+  - `unit_count` is `"Unit/Box"` and `quantity` is `"Qty"`. `unit` is `"BOX"`
+    or `"PIECE"`, or `""` if the UOM cell wasn't read.
+  - One call handles one photographed page; a multi-page receipt is several
+    calls whose items are then submitted with the same `delivery_code` (§2).
+  - **Struck-through / inferred cells.** Staff tick or strike through Qty and
+    UOM while checking a delivery, so the server fills unreadable cells from
+    the row's printed arithmetic (`Total = Qty × Unit/Box × Sales Price`),
+    from `PIECE` ⇒ Unit/Box 1 / Unit/Box 1 ⇒ `PIECE`, and from this store's
+    most recent delivery of the same `item_code`. Each item carries:
+    - `inferred: ("unit_count" | "unit" | "quantity" | "item_price" |
+      "total_item_price")[]` — cells that were worked out, not read. Shown as
+      "calculated" on the review screen; never presented as OCR'd.
+    - `has_annotation: boolean` — handwriting on the row: a note after the
+      description (already stripped from `item_name`), or a handwritten Qty
+      that disagreed with the arithmetic. `quantity` is always the *printed*
+      quantity; staff correct it on review if what arrived differs.
+  - **`totals`** — the page's printed totals block, `{ total_pcs, total_box,
+    total_items, total_value }`, all strings, `""` when not read. The review
+    screen compares them live against the edited rows (`useReceiptTotalsCheck`):
+    `total_box`/`total_pcs` = Σ quantity of BOX/PIECE rows, `total_items` =
+    distinct item codes, `total_value` = Σ total_item_price. Soft warning only.
+
+- **Auth / `uploaded_by`**: currently hardcoded to `"prototype-session"`.
+  No real user/session identity exists yet on the frontend.
+- **Realtime sync (§8)**: no Supabase Realtime subscription exists.
+  `sample-store.ts`'s subscribe/notify pattern is a local stand-in for what
+  a realtime channel will eventually drive, but there's no networking
+  involved today.
+- **Offline queue / IndexedDB / PWA (§8/§9)**: not built. Deferred by
+  agreement until real backend latency exists to design against.
+- **Route guard**: `/search` and `/upload` are reachable with no store code
+  set (`storeCode` is just `null`) — not a backend concern, but worth
+  knowing the frontend doesn't currently prevent an unscoped call from
+  happening.
+
+---
+
+## 7. Porting note
+
+Every hook above is written to be the seam: `features/deliveries/hooks/*`
+and `features/upload/hooks/use-delivery-draft.ts` call into
+`features/deliveries/lib/sample-store.ts` only, never `fetch`/Supabase
+directly. Swapping that module's internals for real `useQuery`/`useMutation`
+calls against Supabase — keeping each hook's exported parameter and return
+shape identical — should not require changing anything in
+`features/upload/components` or `features/search/components`. Where a
+hook's current behavior (e.g. grouping/filtering in §3) is really a query
+shape that belongs in SQL/an RPC rather than client-side `.filter()`, that's
+a hook-internals change, still without touching call sites.
+
+---
+
+## 9. Write path — a delivery's note
+
+> (§8, quantity corrections, lives in the server repo's copy of this doc.)
+
+**Built on the server** (branch `19-add-delivery-note`, 2026-10-12) to the
+spec below, matching the frontend side (UI branch
+`49-add-note-on-the-success-page-of-uploading`). Saving only works once
+`supabase/migrations/20261012000000_add_delivery_note.sql` has been applied
+to the Supabase project.
+
+**Hook:** `useUpdateDeliveryNote()` → `updateNote(deliveryCode, input): Promise<Delivery>`
+(`features/deliveries/hooks/use-update-delivery-note.ts`), driven by
+`useDeliveryNote` (`features/deliveries/hooks/use-delivery-note.ts`) through
+`DeliveryNoteForm`, which is used in two places:
+- the upload's success screen (`BatchSummaryStep`) — one box per delivery the
+  batch saved to;
+- each grouped search-result card (§3, `search-results.tsx`) — the note
+  shows under the delivery code and above the item list, even while the
+  group is collapsed; tapping it opens the editor. An open card with no note
+  shows "Add note". So a note can be added or changed any time after upload.
+
+One note per delivery, **replaced** on every save (not appended). The box is
+pre-filled from `delivery.note` on the last `POST /api/deliveries` response of
+the batch, so a later upload of another page shows the note already saved.
+
+**Backend needs:**
+
+- Column: `alter table deliveries add column note text;` (nullable, no
+  default). New migration under `supabase/migrations/`, mirrored in
+  `schema.sql`.
+- `note` must come back on every `Delivery` the frontend reads — the
+  `create_delivery` RPC's returned `delivery` (both create and append paths),
+  `GET /api/deliveries/recent`, `GET /api/deliveries/:delivery_code`, and each
+  group's `delivery` in `GET /api/search`. As of 2026-10-12 all of these
+  already return the full row (`select("*")` in `deliveries.ts`/`search.ts`
+  line 199; `to_jsonb(v_delivery)` in `create_delivery`), so adding the
+  column is enough — just don't narrow any of them to an explicit column
+  list without `note`.
+- Route: **`PATCH /api/deliveries/:delivery_code/note`** — register it in
+  `deliveries.ts` alongside the item routes (it's more specific than the
+  bare `GET /:delivery_code`, and a different method, so order doesn't
+  conflict).
+
+  ```ts
+  // body
+  interface UpdateDeliveryNoteInput {
+    store_code: string;   // trim + uppercase, same as everywhere else
+    note: string | null;  // null (or blank after trim) clears the note
+  }
+  // 200
+  { delivery: Delivery } // the updated row, note included
+  ```
+
+  - Trim `note`; an empty string after trimming is stored as `null`.
+  - Max **500** characters after trimming → 400 `invalid_body` (the frontend
+    already caps input at 500, `DELIVERY_NOTE_MAX_LENGTH`).
+  - Update only where `delivery_code` **and** `store_code` match → 404
+    `not_found` otherwise, so one store can't write to another's delivery.
+    (Unlike the quantity PATCH in §8, which takes no `store_code` — see the
+    server's `backend-left-to-do.md` §4.)
+  - A single-row update, so a plain `.update().eq().eq().select().maybeSingle()`
+    is enough — no RPC needed.
+  - No audit/history row — unlike quantity corrections, the note is the
+    staff's own remark, not delivered data.
+  - The frontend treats any non-2xx as "couldn't save, try again" and keeps
+    the typed text; the response body's error shape isn't read.
+- Until the column exists the frontend reads a missing `note` as `null`, so
+  search and upload keep working; only saving a note fails.
+
+---
+
+## 10. Store access — passcode on every request
+
+Added 2026-10-13 (backend branch `21-store-passcode-access`, UI branch
+`52-store-passcode-access`). Each store has one staff passcode
+(`main-file.md` §5, store passcode rule); a store code alone no longer grants access.
+
+**Every `/api` request** (not `/health`) carries:
+
+```
+X-Store-Code: 245          // the session's store, trim + uppercase
+X-Store-Passcode: <passcode>
+```
+
+- Missing headers, or a wrong passcode → **401** `{ error: "unauthorized" }`.
+- A store with no passcode set, or no row at all → **401**
+  `{ error: "store_not_set_up" }`. Stores are created and given passcodes
+  with the backend's `npm run store:passcode -- <store_code> [name]`, never
+  over the API — and no longer on first upload.
+- A `store_code` in the query string or JSON body that isn't the header's
+  store → **403** `{ error: "forbidden" }`. `/api/ocr`'s multipart
+  `store_code` field gets the same check in the route.
+- Routes that take only a delivery code (`GET /api/deliveries/:delivery_code`,
+  the quantity PATCH, `/history`) only see the signed-in store's rows —
+  another store's delivery is a 404.
+- More than `PASSCODE_ATTEMPTS_PER_15_MIN` (default 10) 401s from one IP in
+  15 minutes → **429** `{ error: "too_many_attempts" }` for every request
+  from that IP until the window ends.
+- Passcodes are printable ASCII, no spaces, at least 6 characters — they
+  travel in a header, which browsers limit to Latin-1.
+
+**`GET /api/stores/current`** → `{ store: { store_code, name } }` — the
+store the headers signed in as. Reaching it at all means the pair was
+accepted, so it's how the store screen checks a passcode before saving it.
+`GET /api/stores` (list every store) and `POST /api/stores` are gone.
+
+**Frontend side:**
+- `src/lib/store-session-storage.ts` keeps the store code and passcode in
+  localStorage (`osave.store_code`, `osave.store_passcode`).
+- `backendFetch` (`src/lib/api-client.ts`) is the only way the app calls the
+  backend: it adds both headers, and on any 401 forgets the passcode (keeping
+  the code), so `useRequireStoreSession` sends staff back to the store screen
+  to re-enter it — e.g. after the manager changes it.
+- The store screen (`StoreCodeForm`, `useStoreSignIn`) checks a code +
+  passcode with `GET /api/stores/current` before saving them; the passcode can
+  be left blank when this phone already has it for that code. A QR scan
+  (`QrScanView`) fills in only the store code, then asks for the passcode.

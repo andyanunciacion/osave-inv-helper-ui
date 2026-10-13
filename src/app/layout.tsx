@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "osave inventory helper",
+  title: "Inventory Helper",
   description: "Delivery receipt scanning and inventory search for store staff",
 };
 
@@ -25,9 +25,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Light/dark follows the phone setting (globals.css); the browser chrome
+  // matches each mode's page background.
+  colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+    { media: "(prefers-color-scheme: light)", color: "#f1f5f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#12161d" },
   ],
 };
 
