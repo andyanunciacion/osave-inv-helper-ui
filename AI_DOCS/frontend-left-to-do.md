@@ -17,11 +17,11 @@ but not pushed. The remote branch was created from an older commit, so a
 plain push fast-forwards it. Then open the PR into `develop`. #18 and #40 are
 merged (PRs #39, #41).
 
-**Release dependency:** the server's `#15` (crossed-out Qty/UOM,
-`inferred` / `has_annotation` / `totals` on `/api/ocr`) is committed in
-`osave-inv-helper-server` but **not pushed or merged**, and this repo's #31
-(already on `develop`) depends on it. Ship them together. See the server's
-`AI_DOCS/backend-left-to-do.md` §1.
+**Release (2026-10-13):** deploy setup added in #55 (Vercel; README
+"Deployment", `.env.example`, CI). Nothing is released yet: `production` is
+still at the initial commit. The server (Railway) has to go out at the same
+time, since every feature on `develop` needs its matching backend; see the
+server's `AI_DOCS/backend-left-to-do.md` §1.
 
 Items 2–5 below were re-verified against code on 2026-10-07 and were all still
 open then; nothing merged since 2026-09-25 (#31, #32, #35, #37) closed any of
