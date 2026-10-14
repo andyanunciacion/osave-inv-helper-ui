@@ -1,9 +1,8 @@
 import { parse } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
-// Shared by use-delivery-search (grouped view) and use-unified-item-search
-// (flat, date-only view) so both match a delivery_date against a range the
-// same way.
+// Shared so every caller matches a delivery_date against a range the same
+// way.
 //
 // delivery_date is a "yyyy-MM-dd" string (§4). Parsing it with `new
 // Date(dateStr)` (or date-fns's parseISO) treats a date-only string as UTC

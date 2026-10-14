@@ -34,7 +34,7 @@ function group(overrides: Partial<DeliverySearchResultGroup> = {}): DeliverySear
 }
 
 describe("useDeliverySearch", () => {
-  it("does not fetch until a query is present, even with a store selected", () => {
+  it("does not fetch without a query or date range, even with a store selected", () => {
     fetchGroupedSearch.mockResolvedValue([]);
 
     const { result } = renderHook(
@@ -122,5 +122,18 @@ describe("useDeliverySearch", () => {
 
     await waitFor(() => expect(fetchGroupedSearch).toHaveBeenCalled());
     expect(fetchGroupedSearch).toHaveBeenCalledWith("STORE1", "widget", range);
+  });
+
+  it("fetches grouped results for a date-only search", async () => {
+    fetchGroupedSearch.mockResolvedValue([group(), group({ delivery: { ...group().delivery, delivery_code: "INV-2" } })]);
+    const range = { from: new Date(2026, 8, 1), to: new Date(2026, 8, 30) };
+
+    const { result } = renderHook(() => useDeliverySearch({ storeCode: "STORE1", query: "", range }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.groups).toHaveLength(2));
+    expect(result.current.hasActiveFilters).toBe(true);
+    expect(fetchGroupedSearch).toHaveBeenCalledWith("STORE1", "", range);
   });
 });
