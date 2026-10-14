@@ -1,7 +1,6 @@
 import type { DeliveryItem } from "@/types/schema";
 
-// Shared item ordering for search results (grouped and unified views alike):
-// always by item_code, natural/numeric so "SAN-2" sorts before "SAN-10".
+// Shared item ordering for search results: always by item_code, natural/numeric so "SAN-2" sorts before "SAN-10".
 // item_code is nullable (§4) — items with no printed code sort first, ahead
 // of every coded item.
 export function compareByItemCode(a: DeliveryItem, b: DeliveryItem): number {
