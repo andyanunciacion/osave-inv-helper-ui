@@ -5,9 +5,9 @@ import { toQueryStatus, type QueryStatus } from "../lib/query-status";
 import type { DeliverySearchResultGroup } from "../types";
 
 // §6 flow C: free-text query matched against item_code/item_name/
-// delivery_code, plus a delivery_date range, store-scoped. Only fires once
-// there's an actual query — a date-only filter is useUnifiedItemSearch's
-// job (see search-results-page.tsx's isDateOnly branch).
+// delivery_code, plus a delivery_date range, store-scoped. Fires once
+// there's a query or a date range. A date-only search (no text) returns
+// every delivery in the range as its own group, with all of its items.
 export interface UseDeliverySearchParams {
   storeCode: string | null;
   query: string;
@@ -34,7 +34,7 @@ export function useDeliverySearch({
   const { data, isError, isLoading, isPaused, refetch } = useQuery({
     queryKey: ["deliveries", storeCode, "search", trimmedQuery, range?.from, range?.to],
     queryFn: () => fetchGroupedSearch(storeCode as string, trimmedQuery, range),
-    enabled: Boolean(storeCode) && Boolean(trimmedQuery),
+    enabled: Boolean(storeCode) && hasActiveFilters,
   });
 
   return {

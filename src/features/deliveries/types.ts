@@ -10,14 +10,6 @@ export interface DeliveryGroup {
   items: DeliveryItem[];
 }
 
-// A delivery_item flattened out of its DeliveryGroup, annotated with the
-// parent delivery's date/code — used by the date-only "unified" results
-// view (search-results-page.tsx), which intentionally drops delivery
-// grouping in favor of one flat list.
-export interface UnifiedItemRow extends DeliveryItem {
-  delivery_date: string;
-}
-
 // useDeliverySearch's per-group result: which of the delivery's items
 // actually matched the query (a delivery can have 50-80 items — showing
 // the whole receipt for a one-item match would defeat the point of

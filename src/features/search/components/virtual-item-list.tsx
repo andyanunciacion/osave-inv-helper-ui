@@ -2,15 +2,13 @@
 
 import { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ItemHistoryPanel } from "@/features/deliveries/components/item-history-panel";
 import { formatCurrency, formatItemLabel, formatQuantity } from "@/features/deliveries/lib/format";
 import type { DeliveryItem } from "@/types/schema";
 
-interface VirtualItemListProps<T extends DeliveryItem> {
-  items: T[];
-  renderMeta?: (item: T) => ReactNode;
+interface VirtualItemListProps {
+  items: DeliveryItem[];
   maxHeight?: number;
 }
 
@@ -19,14 +17,9 @@ interface VirtualItemListProps<T extends DeliveryItem> {
 // nested scroll area with empty space below it.
 const SHORT_LIST_MAX = 20;
 
-// Renders only the item rows currently in view. Used both for an expanded
-// delivery group's items and for the unified (date-only) flat list — either
-// can run to hundreds of rows once real data replaces the sample set.
-export function VirtualItemList<T extends DeliveryItem>({
-  items,
-  renderMeta,
-  maxHeight = 420,
-}: VirtualItemListProps<T>) {
+// Renders only the item rows currently in view — an expanded delivery
+// group's items can run to hundreds of rows.
+export function VirtualItemList({ items, maxHeight = 420 }: VirtualItemListProps) {
   const capped = items.length > SHORT_LIST_MAX;
   const parentRef = useRef<HTMLDivElement>(null);
   // Local UI state: which single row (if any) has its history panel open.
@@ -81,7 +74,6 @@ export function VirtualItemList<T extends DeliveryItem>({
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
                     {formatQuantity(item.quantity, item.unit, item.unit_count)}
-                    {renderMeta ? <> · {renderMeta(item)}</> : null}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">

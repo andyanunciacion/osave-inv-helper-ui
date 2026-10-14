@@ -24,8 +24,9 @@ interface SearchResultsProps {
 // across several deliveries shows as separate groups. Each group shows only
 // the items that matched (useDeliverySearch), collapsed by default, except
 // an exact delivery_code match, which shows every item and expands
-// automatically — the groups list itself paginates for broad queries that
-// match many deliveries.
+// automatically. A date-only search shows every delivery in the range with
+// all of its items, collapsed. The groups list itself paginates for broad
+// searches that match many deliveries.
 export function SearchResults({ groups }: SearchResultsProps) {
   const { visibleGroups, hasMore, loadMore } = usePaginatedGroups(groups);
 
