@@ -326,6 +326,59 @@ describe("useDeliveryDraft", () => {
     expect(result.current.canConfirm).toBe(true);
   });
 
+  it("calculates a typed-in row's Total, keeps it live, and lets the user take it over", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+    act(() => result.current.addItem());
+    const id = result.current.items[1].localId;
+    const row = () => result.current.items[1];
+
+    act(() => result.current.updateItemField(id, "quantity", "2"));
+    act(() => result.current.updateItemField(id, "unit_count", "12"));
+    expect(row().total_item_price).toBe("");
+
+    act(() => result.current.updateItemField(id, "item_price", "10"));
+    expect(row().total_item_price).toBe("240.00");
+    expect(row().inferred).toEqual(["total_item_price"]);
+
+    act(() => result.current.updateItemField(id, "quantity", "3"));
+    expect(row().total_item_price).toBe("360.00");
+
+    // Typed by the user: theirs from now on, even when Qty changes again.
+    act(() => result.current.updateItemField(id, "total_item_price", "350"));
+    act(() => result.current.updateItemField(id, "quantity", "4"));
+    expect(row().total_item_price).toBe("350");
+    expect(row().inferred).toEqual([]);
+  });
+
+  it("doesn't refill a Total the user clears to retype", () => {
+    const draft = ocrResult();
+    draft.items[0].total_item_price = "";
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    // Seeded rows get the same treatment as edited ones.
+    expect(result.current.items[0].total_item_price).toBe("240.00");
+
+    act(() => result.current.updateItemField("a", "total_item_price", ""));
+    expect(result.current.items[0].total_item_price).toBe("");
+  });
+
+  it("never recalculates a Total read off the receipt", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+    act(() => result.current.updateItemField("a", "quantity", "3"));
+    expect(result.current.items[0].total_item_price).toBe("240");
+    expect(result.current.items[0].hasMismatch).toBe(true);
+  });
+
+  it("sums the rows into grand totals, ignoring empty added rows and the printed totals", () => {
+    const draft = ocrResult();
+    draft.totals = { total_pcs: "", total_box: "9", total_items: "1", total_value: "9999.00" };
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    act(() => result.current.addItem());
+    expect(result.current.summary).toEqual({ totalBox: 2, rowsMissingBox: 0, totalValue: 240, rowsMissingTotal: 0 });
+
+    act(() => result.current.updateItemField("a", "quantity", "3"));
+    expect(result.current.summary).toMatchObject({ totalBox: 3, totalValue: 240 });
+  });
+
   it("adds and removes item rows", () => {
     const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
 

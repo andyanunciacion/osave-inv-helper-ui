@@ -221,8 +221,8 @@ export function ItemRowEditor({
           <Sparkles className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
           <span>
             {item.inferred.map((field) => FIELD_LABELS[field]).join(", ")}{" "}
-            calculated from the receipt&apos;s totals — the cell was crossed out
-            or unreadable.
+            calculated from the row&apos;s other cells, not read off the
+            receipt — check it against the paper.
           </span>
         </p>
       ) : null}
