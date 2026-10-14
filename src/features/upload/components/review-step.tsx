@@ -21,6 +21,7 @@ import { formatCurrency } from "@/features/deliveries/lib/format";
 import { cn } from "@/lib/utils";
 import type { UseDeliveryDraftResult } from "../hooks/use-delivery-draft";
 import type { TotalsMismatch } from "../lib/receipt-totals";
+import { DraftSummaryCard } from "./draft-summary-card";
 import { INFERRED_CLASS, ItemRowEditor } from "./item-row-editor";
 
 function describeMismatch({ kind, printed, counted }: TotalsMismatch): string {
@@ -75,6 +76,7 @@ export function ReviewStep({
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
+    summary,
     canConfirm,
     stage,
     submitError,
@@ -238,6 +240,8 @@ export function ReviewStep({
           ))}
         </div>
       </div>
+
+      <DraftSummaryCard summary={summary} />
 
       {submitError ? (
         <Alert variant="destructive">

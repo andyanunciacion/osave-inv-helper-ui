@@ -3,6 +3,8 @@ import { useCreateDelivery } from "@/features/deliveries/hooks/use-create-delive
 import { hasPriceMismatch } from "@/features/deliveries/lib/format";
 import type { CreateDeliveryResult, NewDeliveryInput } from "@/features/deliveries/types";
 import type { ItemUnit } from "@/types/schema";
+import { AUTO_TOTAL_INPUTS, withAutoTotal } from "../lib/auto-total";
+import { summarizeDraft, type DraftSummary } from "../lib/draft-summary";
 import { checkReceiptTotals, type TotalsCheck } from "../lib/receipt-totals";
 import { describeSaveError } from "../lib/save-error";
 import type { DraftHeader, DraftItem, OcrResult } from "../types";
@@ -54,6 +56,9 @@ export interface UseDeliveryDraftResult {
   // The rows compared against the receipt's printed totals block — a
   // warning (a row may be missing, or a quantity misread), not a block.
   totalsCheck: TotalsCheck;
+  // Grand totals summed from the rows as they stand (not the receipt's
+  // printed ones), for staff to check against the paper.
+  summary: DraftSummary;
   canConfirm: boolean;
   stage: DraftStage;
   result: CreateDeliveryResult | null;
@@ -135,7 +140,7 @@ export function useDeliveryDraft(
   sessionStoreCode: string,
 ): UseDeliveryDraftResult {
   const [header, setHeader] = useState<DraftHeader>(ocrResult.header);
-  const [items, setItems] = useState<DraftItem[]>(() => missingFirst(ocrResult.items));
+  const [items, setItems] = useState<DraftItem[]>(() => missingFirst(ocrResult.items.map(withAutoTotal)));
   const [stage, setStage] = useState<DraftStage>("editing");
   const [result, setResult] = useState<CreateDeliveryResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -173,6 +178,8 @@ export function useDeliveryDraft(
 
   const totalsCheck = useMemo(() => checkReceiptTotals(ocrResult.totals, items), [ocrResult.totals, items]);
 
+  const summary = useMemo(() => summarizeDraft(items.filter(hasContent)), [items]);
+
   const canConfirm =
     !storeMismatch &&
     !missingReceiptStoreCode &&
@@ -185,15 +192,17 @@ export function useDeliveryDraft(
     setHeader((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  // A cell the user typed is no longer "calculated".
+  // A cell the user typed is no longer "calculated". Editing Qty, Unit/Box or
+  // Price refreshes a blank or calculated Total; editing the Total itself
+  // doesn't — clearing it to retype must not have it refill underneath.
   const updateItemField = useCallback(
     (localId: string, field: DraftItemField, value: string) => {
       setItems((prev) =>
-        prev.map((item) =>
-          item.localId === localId
-            ? { ...item, [field]: value, inferred: item.inferred.filter((f) => f !== field) }
-            : item,
-        ),
+        prev.map((item) => {
+          if (item.localId !== localId) return item;
+          const next = { ...item, [field]: value, inferred: item.inferred.filter((f) => f !== field) };
+          return (AUTO_TOTAL_INPUTS as readonly string[]).includes(field) ? withAutoTotal(next) : next;
+        }),
       );
     },
     [],
@@ -265,6 +274,7 @@ export function useDeliveryDraft(
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
+    summary,
     canConfirm,
     stage,
     result,
