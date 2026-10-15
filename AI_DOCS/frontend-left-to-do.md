@@ -1,7 +1,9 @@
 # Frontend — Left To Do
 
 Reference doc for what's left to finish the frontend. Last updated
-2026-10-08 (previous scans: 2026-10-07, 2026-09-25, 2026-09-16). Companion to
+2026-10-15 against `65-reconcile-doesnt-fill-a-blank-delivery_date-from-sibling-pages`
+(off `develop` at `1c60166`; `npm test` 230/230 passing). Previous scans:
+2026-10-08, 2026-10-07, 2026-09-25, 2026-09-16. Companion to
 `AI_DOCS/main-file.md` (plan/domain rules) and `AI_DOCS/frontend-contract.md`
 (backend API shape as the frontend expects it). Re-verify against current
 code before trusting this — it's a point-in-time snapshot, not live state.
@@ -9,24 +11,43 @@ code before trusting this — it's a point-in-time snapshot, not live state.
 **Context at time of writing:** the frontend runs entirely against the real
 backend (`NEXT_PUBLIC_API_URL`, default `http://localhost:4000`) — the
 in-memory sample store and mock OCR were removed in #16/#19. Issue branches
-(`<n>-<slug>`) merge into `develop`.
+(`<n>-<slug>`) merge into `develop`; `develop` is merged into `production`
+to release.
 
-**In flight (2026-10-08):** #42 (merged-items notice after a clean save,
-`93154c5`) is committed on `42-merge-duplicate-notice-never-shows-after-a-clean-save`
-but not pushed. The remote branch was created from an older commit, so a
-plain push fast-forwards it. Then open the PR into `develop`. #18 and #40 are
-merged (PRs #39, #41).
+**In flight (2026-10-15): #65, inferred Transaction date** (uncommitted on
+its branch). Server #31 makes
+`/api/ocr/reconcile` fill a blank `delivery_date` from sibling pages with
+the same `printout_datetime`, flagged `delivery_date_inferred`. The frontend
+side:
+`OcrReconcilePage.delivery_date_inferred` (optional, `?? false` for a server
+that predates it), `BatchPage.deliveryDateInferred` in `use-ocr-capture`,
+and the review screen gives the date field the dashed inferred outline plus
+"filled in from another page in this batch. Double-check it." — the same
+treatment as an inferred store code. Hook-tested, and checked in the browser
+2026-10-15 against the local server with #31: the `14`, `14(1)`, `14(2)`
+batch showed 2026-09-14 marked inferred on pages 2 and 3 (page 2 with the
+store-code mark too). All three pages were confirmed, so ITPH1982020 is now
+in the DB (8 + 15 + 13 = 36 items). Release together with server #31.
 
-**Release (2026-10-13):** deploy setup added in #55 (Vercel; README
-"Deployment", `.env.example`, CI). Nothing is released yet: `production` is
-still at the initial commit. The server (Railway) has to go out at the same
-time, since every feature on `develop` needs its matching backend; see the
+Same batch of uncommitted changes: **each upload screen now opens at the
+top.** Confirming a page used to open the next page scrolled part-way down
+(the window kept the old page's scroll position). `useScrollToTop`
+(`upload/hooks/use-scroll-to-top.ts`) runs when a page mounts, when it
+switches between review and result, and for the partial-batch and summary
+screens. Checked in the browser by logging `scrollTo` calls on "Skip to next
+page" (same remount as a clean save).
+
+**Released.** `production` (Vercel, https://a-creates-inv-helper.vercel.app)
+was first merged from `develop` on 2026-10-13 (PR #57), then again with #58
+and #60 (PR #62, 2026-10-14). It holds everything on `develop` up to #60.
+The server (Railway) is released to the same point; its pre-launch checklist
+(real passcode for store 245, `TRUST_PROXY`, `ALLOWED_ORIGINS`) is in the
 server's `AI_DOCS/backend-left-to-do.md` §1.
 
-Items 2–5 below were re-verified against code on 2026-10-07 and were all still
-open then; nothing merged since 2026-09-25 (#31, #32, #35, #37) closed any of
-them. Item 2 has since been done (#46, 2026-10-08).
-Item 1 is the follow-up list from the first full browser pass (2026-10-07).
+Items 3–5 were re-checked against code on 2026-10-15 and are all still open:
+the capture screen still blocks while OCR runs, `idb` is still unused, and
+`public/` has no manifest or icons. Item 1 is the follow-up list from the
+first full browser pass (2026-10-07).
 
 ---
 
@@ -167,39 +188,39 @@ Follow-ups from that pass, also done 2026-10-07:
 ### Backend (for `osave-inv-helper-server`)
 
 These are tracked in the server's `AI_DOCS/backend-left-to-do.md`, last
-scanned 2026-10-08. The ones that touch this repo:
+scanned 2026-10-15. The ones that touch this repo:
 
-- **Reconcile doesn't fill a blank Transaction date** (server §3). Seen on
-  the `14*` batch: staff had to type the date on pages 2/3. The proposed
-  `delivery_date_inferred` flag would need the dashed inferred outline here,
-  like the store code.
 - **Reconcile doesn't cross-check `delivery_code`** (server §3). A page with
   a misread Inv. Tran. No. saves as a second, bogus delivery. Needs a
   contract decision (flag only, or also fill) and a review-screen warning.
 - **Printed totals partly missed** for `17.jpg` (server §3): only
   `total_value` came back, so a wrong Qty still shows "Matches the totals
-  printed on the receipt."
-- **Search and recent uploads silently stop at 1,000 item rows** (server
-  §2). Two full-size deliveries in a date range would drop rows and give a
-  wrong total. The fix is server-only, but "Load more" and the unified view
-  should be re-checked afterwards.
-- **A failed quantity save can still change the quantity** (server §2): the
-  PATCH updates first and writes history second, so a 500 from the history
-  insert leaves the new value saved but unaudited. `use-update-item-quantity`
-  shows it as failed. Refetching on error (invalidate on `onSettled`, not
-  only `onSuccess`) would at least show the real value.
-- **The two `frontend-contract.md` copies have drifted** (server §6). This
-  copy is missing the `/api/ocr/reconcile` section,
-  `DraftHeader.printout_datetime`, the full `totals` rules and all of §8
-  (quantity PATCH). The server's copy is missing this repo's newer §2
-  wording. Merge them once and copy the result to both repos.
+  printed on the receipt." Still true on 2026-10-14 for `17`, `17(2)` and
+  their Messenger re-photos. #58's running Total Box / Total Value card
+  lets staff check against the paper by eye in the meantime.
+- **Item-row reads are paged now** (server #17 fixed the 1,000-row cap).
+  Nothing to change here, but once the DB holds more than 1,000 item rows
+  for one store, re-check "Load more" and a long date range's grouped
+  cards (#60) against the real counts. The server also needs Supabase's
+  `max_rows` confirmed to be at least 1000 (server §2).
+- **The two `frontend-contract.md` copies have drifted** (server §6). Since
+  2026-10-15 §6 (OCR, incl. `/api/ocr/reconcile` and
+  `delivery_date_inferred`) matches in both. Still different: this copy is
+  missing all of §8 (quantity PATCH); the server's copy is missing this
+  repo's newer §2 wording, and its §8 still says "no frontend hook yet"
+  (#23 built one); §9 (delivery note) is written from each side. Merge them
+  once and copy the result to both repos.
+- **`mergeDuplicateItems` and `upload/lib/repeated-items.ts` must agree**
+  (#63). The review warning groups rows by the same key and compares the
+  same fields as the server's merge. A change to either one needs the other.
 
 ### Still untested
 
 - Rejected rows (an item code already saved on an earlier page of the same
   delivery) — no sample triggered one.
-- #35 "Retry N failed" with a genuinely retryable failure (e.g. a transient
-  `ocr_failed`) succeeding on retry.
+- Saving a delivery note (#49) against the real backend: the server's list
+  (its "Already handled", delivery note) says a real save from the frontend
+  hasn't been tried. Once it has, delete the line there too.
 - "Load more" (needs > 15 delivery groups; DB has 3), and a true ≤ 375px
   viewport. (Light mode was checked 2026-10-07 — see "Light mode (#18)
   contrast" above; the partial-batch and batch-summary screens weren't
@@ -240,7 +261,7 @@ usable meanwhile. Needed:
 ## 4. Offline queue / IndexedDB (§8)
 
 `idb` is an installed dependency but **unused anywhere in `src/`** (re-checked
-2026-10-07). Needed:
+2026-10-15). Needed:
 
 - IndexedDB-backed queue (e.g. `features/upload/lib/offline-queue.ts`)
   holding captured photos temporarily when offline, per §8 — treated as a
@@ -256,7 +277,7 @@ usable meanwhile. Needed:
 
 Nothing exists yet — `public/` has only the Next.js starter SVGs (the company
 logo was removed in #18), no manifest or service worker (re-checked
-2026-10-07). Needed:
+2026-10-15). Needed:
 
 - Web app manifest (name, icons, `display: standalone`, theme color). Check
   `node_modules/next/dist/docs/` for this Next.js version's `app/manifest.ts`
@@ -270,7 +291,7 @@ logo was removed in #18), no manifest or service worker (re-checked
 
 The only cross-client freshness comes from a user's own mutation invalidating
 their own TanStack Query cache (`use-create-delivery.ts`,
-`use-update-item-quantity.ts`) — another user's confirmed delivery or quantity
+`use-update-item-quantity.ts`, `use-update-delivery-note.ts`) — another user's confirmed delivery or quantity
 edit won't show up without a manual refetch. Needed once the backend supports
 it:
 
@@ -290,7 +311,7 @@ soft-delete + edit log. Not required for MVP.
 
 `uploaded_by` has no real identity source. Deliveries are saved with
 `uploaded_by: null` because **the frontend never sends it** (checked
-2026-10-08: no reference in `src/` outside `types/schema.ts` and test
+2026-10-15: no reference in `src/` outside `types/schema.ts` and test
 fixtures). The server stores the field when it's present, and
 `frontend-contract.md`'s "hardcoded to `prototype-session`" line is stale.
 Access is per store, not per person: each store has one staff passcode
@@ -349,13 +370,29 @@ holding an unlocked phone with the app has that store's access. There's no
     photos are marked not retryable.
   - #37: visible labels on every review item field (tied via `useId`), and
     `SelectTrigger` sized like `Input` so the UOM select lines up.
-- **Search flow (flow C):** grouped vs. unified (date-only) results,
-  exact-delivery-code auto-expand, group pagination (15/page), item
-  virtualization (`@tanstack/react-virtual`), shareable URL-driven results
-  page. #23: per-item quantity edit + history panel in results.
+  - #44 / #46: skip an already-saved page in a batch; specific capture-screen
+    OCR errors (both in item 1/2 above).
+  - #47: photos are compressed in the browser only when over 9MB, so
+    anything the backend's 10MB limit would accept is sent untouched.
+  - #49: one free-text note per delivery, editable on the upload success
+    screen and on each grouped search card (`frontend-contract.md` §9).
+  - #58: a blank row Total fills itself from Qty × Unit/Box × Price (marked
+    calculated, live until staff type into it); a card under the item list
+    sums Total Box / Total Value as the rows stand, to check against paper.
+  - #63 (PR #64): repeated item codes warned before Confirm (item 1).
+- **Search flow (flow C):** grouped results, exact-delivery-code
+  auto-expand, group pagination (15/page), item virtualization
+  (`@tanstack/react-virtual`), shareable URL-driven results page. #23:
+  per-item quantity edit + history panel in results.
   - #32: search hooks return a `status` (idle | loading | error | success)
     and `retry`; results page shows "Searching…" and a "Couldn't load
     results" alert with Try again instead of a false "No deliveries found".
+  - #60: date-only searches use the same grouped delivery cards (server
+    `view=grouped`, its #28) instead of the flat unified list, which was
+    removed.
+- **Deployment (#55):** Vercel, README "Deployment", `.env.example`, Node
+  pinned via `engines`, CI (lint, test, build) on PRs and pushes to
+  `develop`/`production`.
 - **Theme (#18, merged via PR #39):** company logo/red removed; neutral slate
   with a muted blue accent, light/dark via `prefers-color-scheme`,
   "Inventory Helper" name. Also fixed the self-referencing `--font-sans`

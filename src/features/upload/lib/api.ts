@@ -77,6 +77,8 @@ export async function runOcr(file: File, storeCode: string): Promise<OcrApiRespo
 
 export interface OcrReconcilePage extends DraftHeader {
   receipt_store_code_inferred: boolean;
+  // Optional: a backend from before date recovery doesn't send it.
+  delivery_date_inferred?: boolean;
   store_mismatch: boolean;
 }
 

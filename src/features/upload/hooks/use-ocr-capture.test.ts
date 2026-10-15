@@ -15,7 +15,9 @@ vi.mock("../lib/api", async (importOriginal) => ({
 
 const file = (name = "receipt.jpg") => new File(["x"], name, { type: "image/jpeg" });
 
-function ocrApiResponse(overrides: Partial<{ receipt_store_code: string; printout_datetime: string }> = {}) {
+function ocrApiResponse(
+  overrides: Partial<{ receipt_store_code: string; printout_datetime: string; delivery_date: string }> = {},
+) {
   return {
     header: {
       delivery_code: "ITPH1",
@@ -232,6 +234,38 @@ describe("useOcrCapture", () => {
     expect(result.current.pages[0].receiptStoreCodeInferred).toBe(false);
     expect(result.current.pages[1].receiptStoreCodeInferred).toBe(true);
     expect(result.current.pages[1].ocrResult.header.receipt_store_code).toBe("245");
+  });
+
+  it("takes a Transaction date reconcile filled in from a sibling page, flagged as inferred", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockResolvedValueOnce(ocrApiResponse({ delivery_date: "" }));
+    runOcrReconcile.mockResolvedValue([
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, delivery_date_inferred: false, store_mismatch: false },
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, delivery_date_inferred: true, store_mismatch: false },
+    ]);
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("a.jpg"), file("b.jpg")], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.pages[0].deliveryDateInferred).toBe(false);
+    expect(result.current.pages[1].deliveryDateInferred).toBe(true);
+    expect(result.current.pages[1].ocrResult.header.delivery_date).toBe("2026-08-17");
+  });
+
+  it("treats a reconcile answer without delivery_date_inferred as not inferred", async () => {
+    runOcr.mockResolvedValue(ocrApiResponse());
+    runOcrReconcile.mockResolvedValue([
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, store_mismatch: false },
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, store_mismatch: false },
+    ]);
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("a.jpg"), file("b.jpg")], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.pages.map((p) => p.deliveryDateInferred)).toEqual([false, false]);
   });
 
   it("pauses on `partial` when some photos fail, keeping the ones that were read", async () => {
