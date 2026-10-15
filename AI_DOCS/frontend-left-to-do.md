@@ -78,12 +78,20 @@ Fixed during the pass: the #35 partial-batch screen's "Retry N failed" /
   weren't triggered.
   `frontend-contract.md` §2 synced with the server's copy (`mergedItems`,
   merge-vs-reject rules).
-- **Follow-up: warn about repeated item codes before Confirm.** A merge is
-  only reported after saving, and only quantity can be edited afterwards — so
-  a misread code (`fieldsDisagreed`) can't really be fixed. `useDeliveryDraft`
-  could group rows by the backend's key (`item_code` or
-  `name:<lowercased item_name>`) and the review could show a non-blocking
-  "These rows will be combined" alert, amber when the other fields differ.
+- ~~**Follow-up: warn about repeated item codes before Confirm.**~~ **Done
+  2026-10-14 (#63), unit-tested and checked in the browser on 2026-10-15
+  with `13(2).jfif`.** It showed "2 items listed more than once — 4272, 4295".
+  Changing one 4295 row's Price turned both rows amber ("Price differs"),
+  re-coding a 4272 row cleared its warning, and Confirm stayed enabled
+  (not pressed). `upload/lib/repeated-items.ts` groups the draft rows by the
+  backend's merge key (trimmed `item_code`, else `name:<lowercased
+  item_name>`) and lists which of Description / UOM / Unit/Box / Price differ
+  from the first row — the same check as the server's `mergeDuplicateItems`,
+  so keep the two in sync. `useDeliveryDraft` exposes `repeatedItems` and a
+  per-row `repeat`. The review shows `RepeatedItemsNotice` (a neutral "listed
+  more than once" alert, or an amber "don't match" alert naming the differing
+  fields) and a line on each affected row (an amber border when the fields
+  differ). Non-blocking: Confirm still works.
 - ~~**A paused search shows "No deliveries found".**~~ **Fixed 2026-10-07.**
   TanStack Query pauses a query while the browser is offline, or a retry
   while the page is hidden, and `isLoading` is false while paused — so

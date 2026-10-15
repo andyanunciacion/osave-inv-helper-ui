@@ -23,6 +23,7 @@ import type { UseDeliveryDraftResult } from "../hooks/use-delivery-draft";
 import type { TotalsMismatch } from "../lib/receipt-totals";
 import { DraftSummaryCard } from "./draft-summary-card";
 import { INFERRED_CLASS, ItemRowEditor } from "./item-row-editor";
+import { RepeatedItemsNotice } from "./repeated-items-notice";
 
 function describeMismatch({ kind, printed, counted }: TotalsMismatch): string {
   switch (kind) {
@@ -76,6 +77,7 @@ export function ReviewStep({
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
+    repeatedItems,
     summary,
     canConfirm,
     stage,
@@ -211,6 +213,7 @@ export function ReviewStep({
             </AlertDescription>
           </Alert>
         ) : null}
+        <RepeatedItemsNotice groups={repeatedItems} />
         {totalsCheck.mismatches.length > 0 ? (
           <Alert className="border-amber-500/50">
             <AlertTriangle className="text-amber-600 dark:text-amber-400" />
