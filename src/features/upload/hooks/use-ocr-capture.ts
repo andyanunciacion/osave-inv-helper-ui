@@ -15,11 +15,14 @@ export type { CaptureError, CaptureErrorKind } from "../lib/capture-error";
 export type CaptureStatus = "idle" | "processing" | "partial" | "done" | "error";
 
 // One page of a batch, ready for review: the OCR result plus whether its
-// store code was filled in by /api/ocr/reconcile (not directly OCR'd), so
-// the review screen can flag it as worth a second look.
+// store code / Transaction date / Inv. Tran. No. were filled in by
+// /api/ocr/reconcile (not directly OCR'd), so the review screen can flag them
+// as worth a second look.
 export interface BatchPage {
   ocrResult: OcrResult;
   receiptStoreCodeInferred: boolean;
+  deliveryDateInferred: boolean;
+  deliveryCodeInferred: boolean;
 }
 
 // A photo of the current batch that OCR couldn't turn into a page.
@@ -122,12 +125,20 @@ export function useOcrCapture(): UseOcrCaptureResult {
     setStatus(next);
   }, []);
 
-  // Turns the read pages into the review queue — reconciling store codes
-  // across them first when there's more than one.
+  // Turns the read pages into the review queue — reconciling store codes,
+  // Transaction dates and delivery codes across them first when there's more
+  // than one.
   const finish = useCallback(async (results: OcrResult[]) => {
     // Nothing to cross-reference a lone photo against — skip the call.
     if (results.length === 1) {
-      setPages([{ ocrResult: results[0], receiptStoreCodeInferred: false }]);
+      setPages([
+        {
+          ocrResult: results[0],
+          receiptStoreCodeInferred: false,
+          deliveryDateInferred: false,
+          deliveryCodeInferred: false,
+        },
+      ]);
       setCurrentIndex(0);
       leaveProcessing("done");
       return;
@@ -151,6 +162,8 @@ export function useOcrCapture(): UseOcrCaptureResult {
             },
           },
           receiptStoreCodeInferred: reconciled[i].receipt_store_code_inferred,
+          deliveryDateInferred: reconciled[i].delivery_date_inferred ?? false,
+          deliveryCodeInferred: reconciled[i].delivery_code_inferred ?? false,
         })),
       );
       setCurrentIndex(0);
@@ -163,7 +176,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
           : {
               kind: "failed",
               title: "Couldn't check the batch",
-              message: "Couldn't verify store codes across the batch. Try again.",
+              message: "Couldn't check store codes, dates and Inv. Tran. Nos. across the batch. Try again.",
               retryable: true,
             },
       );

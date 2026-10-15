@@ -23,6 +23,7 @@ import type { UseDeliveryDraftResult } from "../hooks/use-delivery-draft";
 import type { TotalsMismatch } from "../lib/receipt-totals";
 import { DraftSummaryCard } from "./draft-summary-card";
 import { INFERRED_CLASS, ItemRowEditor } from "./item-row-editor";
+import { RepeatedItemsNotice } from "./repeated-items-notice";
 
 function describeMismatch({ kind, printed, counted }: TotalsMismatch): string {
   switch (kind) {
@@ -53,6 +54,10 @@ interface ReviewStepProps {
   // came from /api/ocr/reconcile instead of being read directly — worth a
   // glance since it's a guess based on a sibling page, not an OCR read.
   receiptStoreCodeInferred?: boolean;
+  // Same, for a Transaction date that was blank in the photo.
+  deliveryDateInferred?: boolean;
+  // Same, for an Inv. Tran. No. that was blank in the photo.
+  deliveryCodeInferred?: boolean;
 }
 
 // Thin: renders the draft header + item rows. All editing/validation logic
@@ -65,6 +70,8 @@ export function ReviewStep({
   unsavedPageCount = 1,
   hasSavedPages = false,
   receiptStoreCodeInferred,
+  deliveryDateInferred,
+  deliveryCodeInferred,
 }: ReviewStepProps) {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const {
@@ -73,14 +80,19 @@ export function ReviewStep({
     storeMismatch,
     missingReceiptStoreCode,
     missingDeliveryDate,
+    missingDeliveryCode,
+    deliveryCodeConflict,
+    deliveryCodeKept,
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
+    repeatedItems,
     summary,
     canConfirm,
     stage,
     submitError,
     updateHeaderField,
+    keepDeliveryCode,
     updateItemField,
     addItem,
     removeItem,
@@ -112,12 +124,56 @@ export function ReviewStep({
           <Input
             id="delivery-code"
             value={header.delivery_code}
+            aria-invalid={missingDeliveryCode || deliveryCodeConflict.length > 0}
+            className={cn(
+              deliveryCodeInferred && !missingDeliveryCode && deliveryCodeConflict.length === 0 && INFERRED_CLASS,
+            )}
             onChange={(event) => updateHeaderField("delivery_code", event.target.value)}
           />
-          <p className="text-xs text-muted-foreground">
-            This is the primary identifier — double-check it against the receipt.
-          </p>
+          {missingDeliveryCode ? (
+            <p className="text-xs text-destructive">
+              Inv. Tran. No. is required — copy it from the receipt.
+            </p>
+          ) : deliveryCodeConflict.length > 0 ? null : deliveryCodeKept ? (
+            <p className="text-xs text-muted-foreground">
+              Kept — differs from the other pages of this receipt.
+            </p>
+          ) : deliveryCodeInferred ? (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Sparkles className="size-3 shrink-0" aria-hidden="true" />
+              Couldn&apos;t be read on this photo — filled in from another page in this batch.
+              Double-check it.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              This is the primary identifier — double-check it against the receipt.
+            </p>
+          )}
         </div>
+
+        {deliveryCodeConflict.length > 0 ? (
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertTitle>Doesn&apos;t match the other pages</AlertTitle>
+            <AlertDescription>
+              <p>
+                Other pages of this receipt read {deliveryCodeConflict.join(" or ")}. Saving a
+                different code creates a separate delivery — check it against the paper.
+              </p>
+              <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
+                {deliveryCodeConflict.map((code) => (
+                  <Button key={code} type="button" onClick={() => updateHeaderField("delivery_code", code)}>
+                    Use {code}
+                  </Button>
+                ))}
+                {/* The alert's red text would otherwise make this read as destructive. */}
+                <Button type="button" variant="outline" className="text-foreground" onClick={keepDeliveryCode}>
+                  This page is right
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
@@ -135,6 +191,7 @@ export function ReviewStep({
               type="date"
               value={header.delivery_date}
               aria-invalid={missingDeliveryDate}
+              className={cn(deliveryDateInferred && !missingDeliveryDate && INFERRED_CLASS)}
               onChange={(event) => updateHeaderField("delivery_date", event.target.value)}
             />
           </div>
@@ -142,6 +199,12 @@ export function ReviewStep({
         {missingDeliveryDate ? (
           <p className="-mt-1.5 text-xs text-destructive">
             Transaction date is required — copy it from the receipt.
+          </p>
+        ) : deliveryDateInferred ? (
+          <p className="-mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+            <Sparkles className="size-3 shrink-0" aria-hidden="true" />
+            Transaction date couldn&apos;t be read on this photo — filled in from another page
+            in this batch. Double-check it.
           </p>
         ) : null}
 
@@ -211,6 +274,7 @@ export function ReviewStep({
             </AlertDescription>
           </Alert>
         ) : null}
+        <RepeatedItemsNotice groups={repeatedItems} />
         {totalsCheck.mismatches.length > 0 ? (
           <Alert className="border-amber-500/50">
             <AlertTriangle className="text-amber-600 dark:text-amber-400" />

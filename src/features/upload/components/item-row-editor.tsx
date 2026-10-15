@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
-import { PenLine, Sparkles, Trash2 } from "lucide-react";
+import { AlertTriangle, Merge, PenLine, Sparkles, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import type {
   DraftItemField,
   DraftItemView,
 } from "../hooks/use-delivery-draft";
+import { describeRowRepeat } from "../lib/repeated-items";
 import type { InferredField } from "../types";
 
 interface ItemRowEditorProps {
@@ -92,7 +93,12 @@ export function ItemRowEditor({
     isInferred(field) ? INFERRED_CLASS : undefined;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+    <div
+      className={cn(
+        "flex flex-col gap-3 rounded-lg border border-border p-3",
+        item.repeat && item.repeat.differingFields.length > 0 && "border-amber-500/60",
+      )}
+    >
       <div className="flex items-end justify-between gap-2">
         <Field
           id={fieldId("item_name")}
@@ -225,6 +231,19 @@ export function ItemRowEditor({
             receipt — check it against the paper.
           </span>
         </p>
+      ) : null}
+      {item.repeat ? (
+        item.repeat.differingFields.length > 0 ? (
+          <p className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            <span>{describeRowRepeat(item.repeat)}</span>
+          </p>
+        ) : (
+          <p className="flex items-start gap-1 text-xs text-muted-foreground">
+            <Merge className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+            <span>{describeRowRepeat(item.repeat)}</span>
+          </p>
+        )
       ) : null}
       {item.has_annotation ? (
         <p className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400">

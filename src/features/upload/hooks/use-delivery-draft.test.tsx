@@ -94,6 +94,58 @@ describe("useDeliveryDraft", () => {
     expect(result.current.stage).toBe("editing");
   });
 
+  it("blocks confirming a delivery code that disagrees with the other pages until it's fixed", () => {
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ delivery_code: "INV-DRAFT-I" }), "STORE1", ["INV-DRAFT-1"]),
+      { wrapper },
+    );
+    expect(result.current.deliveryCodeConflict).toEqual(["INV-DRAFT-1"]);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateHeaderField("delivery_code", "INV-DRAFT-1"));
+    expect(result.current.deliveryCodeConflict).toEqual([]);
+    expect(result.current.deliveryCodeKept).toBe(false);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("lets staff keep a disagreeing delivery code — only that exact code", () => {
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ delivery_code: "INV-DRAFT-2" }), "STORE1", ["INV-DRAFT-1"]),
+      { wrapper },
+    );
+    act(() => result.current.keepDeliveryCode());
+    expect(result.current.deliveryCodeConflict).toEqual([]);
+    expect(result.current.deliveryCodeKept).toBe(true);
+    expect(result.current.canConfirm).toBe(true);
+
+    act(() => result.current.updateHeaderField("delivery_code", "INV-DRAFT-3"));
+    expect(result.current.deliveryCodeConflict).toEqual(["INV-DRAFT-1"]);
+    expect(result.current.deliveryCodeKept).toBe(false);
+    expect(result.current.canConfirm).toBe(false);
+  });
+
+  it("requires the Inv. Tran. No. — a blank one blocks confirming until it's typed", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult({ delivery_code: " " }), "STORE1"), {
+      wrapper,
+    });
+    expect(result.current.missingDeliveryCode).toBe(true);
+    expect(result.current.canConfirm).toBe(false);
+
+    createDeliveryRequest.mockClear();
+    act(() => result.current.confirm());
+    expect(createDeliveryRequest).not.toHaveBeenCalled();
+
+    act(() => result.current.updateHeaderField("delivery_code", "INV-DRAFT-1"));
+    expect(result.current.missingDeliveryCode).toBe(false);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("has no delivery code conflict without sibling pages", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+    expect(result.current.deliveryCodeConflict).toEqual([]);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
   it("requires the receipt's store code — a blank one blocks confirming until it's typed", () => {
     const { result } = renderHook(
       () => useDeliveryDraft(ocrResult({ receipt_store_code: "" }), "STORE1"),
@@ -377,6 +429,33 @@ describe("useDeliveryDraft", () => {
 
     act(() => result.current.updateItemField("a", "quantity", "3"));
     expect(result.current.summary).toMatchObject({ totalBox: 3, totalValue: 240 });
+  });
+
+  it("warns about rows the backend will combine, without blocking confirm", () => {
+    const draft = ocrResult();
+    draft.items.push({ ...draft.items[0], localId: "b", quantity: "1", total_item_price: "120" });
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+
+    expect(result.current.repeatedItems).toEqual([
+      { label: "A1", matchedBy: "item_code", localIds: ["a", "b"], differingFields: [] },
+    ]);
+    expect(result.current.items.map((item) => item.repeat)).toEqual([
+      { matchedBy: "item_code", differingFields: [], otherRows: 1 },
+      { matchedBy: "item_code", differingFields: [], otherRows: 1 },
+    ]);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("flags differing fields on a repeat, and clears the warning once a code is corrected", () => {
+    const draft = ocrResult();
+    draft.items.push({ ...draft.items[0], localId: "b", item_name: "Item B", item_price: "15" });
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    expect(result.current.repeatedItems[0].differingFields).toEqual(["item_name", "item_price"]);
+    expect(result.current.canConfirm).toBe(true);
+
+    act(() => result.current.updateItemField("b", "item_code", "B1"));
+    expect(result.current.repeatedItems).toEqual([]);
+    expect(result.current.items.every((item) => item.repeat === null)).toBe(true);
   });
 
   it("adds and removes item rows", () => {

@@ -290,6 +290,10 @@ deliberately mocked or postponed:
     warehouse_code: string;
     delivery_date: string;      // "yyyy-MM-dd"
     receipt_store_code: string;
+    printout_datetime: string;  // "yyyy-MM-ddTHH:mm:ss", the printed "Date
+                                 // and hour of printout" — not shown on the
+                                 // review screen; kept only to send back to
+                                 // /api/ocr/reconcile for a multi-photo upload
   }
 
   interface DraftItem {
@@ -344,17 +348,69 @@ deliberately mocked or postponed:
     from `PIECE` ⇒ Unit/Box 1 / Unit/Box 1 ⇒ `PIECE`, and from this store's
     most recent delivery of the same `item_code`. Each item carries:
     - `inferred: ("unit_count" | "unit" | "quantity" | "item_price" |
-      "total_item_price")[]` — cells that were worked out, not read. Shown as
-      "calculated" on the review screen; never presented as OCR'd.
+      "total_item_price")[]` — cells that were worked out, not read. Show them
+      as "calculated"; they're never presented as OCR'd.
     - `has_annotation: boolean` — handwriting on the row: a note after the
       description (already stripped from `item_name`), or a handwritten Qty
       that disagreed with the arithmetic. `quantity` is always the *printed*
       quantity; staff correct it on review if what arrived differs.
   - **`totals`** — the page's printed totals block, `{ total_pcs, total_box,
-    total_items, total_value }`, all strings, `""` when not read. The review
-    screen compares them live against the edited rows (`useReceiptTotalsCheck`):
-    `total_box`/`total_pcs` = Σ quantity of BOX/PIECE rows, `total_items` =
-    distinct item codes, `total_value` = Σ total_item_price. Soft warning only.
+    total_items, total_value }`, all strings, `""` when not read (no totals
+    block on a middle page; `total_pcs` absent when the page has no PIECE
+    rows; or the numbers' labels were unreadable). Compare against the
+    (edited) rows: `total_box`/`total_pcs` = Σ quantity of BOX/PIECE rows,
+    `total_items` = number of *distinct* item codes, `total_value` = Σ
+    total_item_price. A mismatch means a missed row or a misread cell — soft
+    warning only, like the per-row price mismatch.
+
+  **As built — `POST /api/ocr/reconcile`** (`application/json`, no image —
+  runs after every page in a multi-photo upload has already come back from
+  `/api/ocr`):
+  - Body: `{ store_code: string, pages: DraftHeader[] }` — `pages` is exactly
+    what `/api/ocr` returned for each page's `header` (all five `DraftHeader`
+    fields, `localId`/items not included). Order doesn't matter and isn't
+    preserved specially; the response mirrors the input array 1:1 by index.
+  - 200 → `{ pages: Array<DraftHeader & { receipt_store_code_inferred:
+    boolean; delivery_date_inferred: boolean; delivery_code_inferred:
+    boolean; store_mismatch: boolean }> }`.
+    `receipt_store_code`, `delivery_date` and `delivery_code` are each
+    reconciled the same way. A page whose value was already non-blank passes
+    it through (trimmed, `receipt_store_code` also normalized;
+    `*_inferred: false`). For a page where
+    it was `""`: if the other pages in the batch with the same
+    `printout_datetime` that read the field all read the same value, that
+    value is copied in and its `*_inferred` flag is `true`. Otherwise it
+    stays `""` and the flag is `false`, same as not calling this endpoint at
+    all. So it's always safe to call unconditionally on a multi-page upload
+    rather than checking first for blanks. An inferred `delivery_date` or
+    `delivery_code` should be marked on the review screen like an inferred
+    item cell. A page whose value was read is never changed, even if a
+    sibling read a different one.
+  - **Disagreeing delivery codes are the frontend's to catch.** Pages of one
+    print run share an Inv. Tran. No., so a page whose code differs from the
+    one its siblings (same `printout_datetime`) read is almost always a
+    misread — and saving it creates a second, bogus delivery that can't be
+    deleted. The server doesn't pick a winner (with two pages there's no
+    majority). The review screen compares the page's code *as edited*
+    against its siblings' — an already-confirmed sibling counting with the
+    code it was saved under — names the siblings' code with a one-tap "Use
+    …" fix, and blocks Confirm until the codes match or staff keep the
+    page's own code.
+  - `store_mismatch` is `true` when that page's (possibly just-inferred)
+    `receipt_store_code` is non-blank and doesn't equal `store_code` — the
+    same check `/api/ocr` does inline, surfaced per-page here instead of a
+    409 since one bad page in a batch shouldn't block review of the others.
+    This is a UI hint only: `POST /api/deliveries` still re-checks
+    `receipt_store_code` against `store_code` itself before writing anything
+    (rule 6, §5), so skipping this endpoint or ignoring the flag can't get a
+    mismatched receipt saved.
+  - 400 `invalid_body`. Never a 409 — there's no single "this page" to reject,
+    just per-page flags for the review screen to act on.
+  - Call this once per upload after all pages' `/api/ocr` calls have
+    resolved, not once per page — it needs every sibling present to find a
+    match. A single-photo upload has no siblings to check against, so
+    skipping the call there is equivalent to calling it (nothing would be
+    inferred).
 
 - **Auth / `uploaded_by`**: currently hardcoded to `"prototype-session"`.
   No real user/session identity exists yet on the frontend.
