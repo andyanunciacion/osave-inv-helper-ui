@@ -54,6 +54,8 @@ interface ReviewStepProps {
   // came from /api/ocr/reconcile instead of being read directly — worth a
   // glance since it's a guess based on a sibling page, not an OCR read.
   receiptStoreCodeInferred?: boolean;
+  // Same, for a Transaction date that was blank in the photo.
+  deliveryDateInferred?: boolean;
 }
 
 // Thin: renders the draft header + item rows. All editing/validation logic
@@ -66,6 +68,7 @@ export function ReviewStep({
   unsavedPageCount = 1,
   hasSavedPages = false,
   receiptStoreCodeInferred,
+  deliveryDateInferred,
 }: ReviewStepProps) {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const {
@@ -137,6 +140,7 @@ export function ReviewStep({
               type="date"
               value={header.delivery_date}
               aria-invalid={missingDeliveryDate}
+              className={cn(deliveryDateInferred && !missingDeliveryDate && INFERRED_CLASS)}
               onChange={(event) => updateHeaderField("delivery_date", event.target.value)}
             />
           </div>
@@ -144,6 +148,12 @@ export function ReviewStep({
         {missingDeliveryDate ? (
           <p className="-mt-1.5 text-xs text-destructive">
             Transaction date is required — copy it from the receipt.
+          </p>
+        ) : deliveryDateInferred ? (
+          <p className="-mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+            <Sparkles className="size-3 shrink-0" aria-hidden="true" />
+            Transaction date couldn&apos;t be read on this photo — filled in from another page
+            in this batch. Double-check it.
           </p>
         ) : null}
 
