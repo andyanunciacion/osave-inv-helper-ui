@@ -379,6 +379,33 @@ describe("useDeliveryDraft", () => {
     expect(result.current.summary).toMatchObject({ totalBox: 3, totalValue: 240 });
   });
 
+  it("warns about rows the backend will combine, without blocking confirm", () => {
+    const draft = ocrResult();
+    draft.items.push({ ...draft.items[0], localId: "b", quantity: "1", total_item_price: "120" });
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+
+    expect(result.current.repeatedItems).toEqual([
+      { label: "A1", matchedBy: "item_code", localIds: ["a", "b"], differingFields: [] },
+    ]);
+    expect(result.current.items.map((item) => item.repeat)).toEqual([
+      { matchedBy: "item_code", differingFields: [], otherRows: 1 },
+      { matchedBy: "item_code", differingFields: [], otherRows: 1 },
+    ]);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("flags differing fields on a repeat, and clears the warning once a code is corrected", () => {
+    const draft = ocrResult();
+    draft.items.push({ ...draft.items[0], localId: "b", item_name: "Item B", item_price: "15" });
+    const { result } = renderHook(() => useDeliveryDraft(draft, "STORE1"), { wrapper });
+    expect(result.current.repeatedItems[0].differingFields).toEqual(["item_name", "item_price"]);
+    expect(result.current.canConfirm).toBe(true);
+
+    act(() => result.current.updateItemField("b", "item_code", "B1"));
+    expect(result.current.repeatedItems).toEqual([]);
+    expect(result.current.items.every((item) => item.repeat === null)).toBe(true);
+  });
+
   it("adds and removes item rows", () => {
     const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
 

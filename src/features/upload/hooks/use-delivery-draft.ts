@@ -6,6 +6,7 @@ import type { ItemUnit } from "@/types/schema";
 import { AUTO_TOTAL_INPUTS, withAutoTotal } from "../lib/auto-total";
 import { summarizeDraft, type DraftSummary } from "../lib/draft-summary";
 import { checkReceiptTotals, type TotalsCheck } from "../lib/receipt-totals";
+import { findRepeatedItems, type RepeatedItemGroup, type RowRepeat } from "../lib/repeated-items";
 import { describeSaveError } from "../lib/save-error";
 import type { DraftHeader, DraftItem, OcrResult } from "../types";
 
@@ -31,6 +32,9 @@ export interface DraftItemView extends DraftItem {
   // content (OCR couldn't read them). item_code is left out — a receipt may
   // legitimately have no code (§4).
   blankFields: DraftItemField[];
+  // Set when another row has the same item code (or, with no code, the same
+  // description) — the backend will combine them on save.
+  repeat: RowRepeat | null;
 }
 
 export interface UseDeliveryDraftResult {
@@ -56,6 +60,10 @@ export interface UseDeliveryDraftResult {
   // The rows compared against the receipt's printed totals block — a
   // warning (a row may be missing, or a quantity misread), not a block.
   totalsCheck: TotalsCheck;
+  // Rows the backend will combine into one on save. A warning, not a block —
+  // a receipt can genuinely print an item twice — but one with
+  // differingFields is likely a misread code, which can't be fixed after save.
+  repeatedItems: RepeatedItemGroup[];
   // Grand totals summed from the rows as they stand (not the receipt's
   // printed ones), for staff to check against the paper.
   summary: DraftSummary;
@@ -151,9 +159,15 @@ export function useDeliveryDraft(
   const missingDeliveryDate = isBlank(header.delivery_date);
   const storeMismatch = Boolean(receiptStoreCode) && receiptStoreCode !== sessionStoreCode.trim().toUpperCase();
 
-  const itemViews: DraftItemView[] = useMemo(
-    () =>
-      items.map((item) => ({
+  const repeatedItems = useMemo(() => findRepeatedItems(items), [items]);
+
+  const itemViews: DraftItemView[] = useMemo(() => {
+    const groupOf = new Map(
+      repeatedItems.flatMap((group) => group.localIds.map((localId) => [localId, group] as const)),
+    );
+    return items.map((item) => {
+      const group = groupOf.get(item.localId);
+      return {
         ...item,
         hasMismatch: hasPriceMismatch(
           toNumberOrNull(item.quantity),
@@ -162,9 +176,16 @@ export function useDeliveryDraft(
           toNumberOrNull(item.total_item_price),
         ),
         blankFields: blankFieldsOf(item),
-      })),
-    [items],
-  );
+        repeat: group
+          ? {
+              matchedBy: group.matchedBy,
+              differingFields: group.differingFields,
+              otherRows: group.localIds.length - 1,
+            }
+          : null,
+      };
+    });
+  }, [items, repeatedItems]);
 
   const unnamedRowCount = useMemo(
     () => itemViews.filter((item) => hasContent(item) && isBlank(item.item_name)).length,
@@ -274,6 +295,7 @@ export function useDeliveryDraft(
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
+    repeatedItems,
     summary,
     canConfirm,
     stage,
