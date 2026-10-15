@@ -14,28 +14,49 @@ in-memory sample store and mock OCR were removed in #16/#19. Issue branches
 (`<n>-<slug>`) merge into `develop`; `develop` is merged into `production`
 to release.
 
-**In flight (2026-10-15): #65, inferred Transaction date** (uncommitted on
-its branch). Server #31 makes
-`/api/ocr/reconcile` fill a blank `delivery_date` from sibling pages with
-the same `printout_datetime`, flagged `delivery_date_inferred`. The frontend
-side:
-`OcrReconcilePage.delivery_date_inferred` (optional, `?? false` for a server
-that predates it), `BatchPage.deliveryDateInferred` in `use-ocr-capture`,
-and the review screen gives the date field the dashed inferred outline plus
-"filled in from another page in this batch. Double-check it." — the same
-treatment as an inferred store code. Hook-tested, and checked in the browser
-2026-10-15 against the local server with #31: the `14`, `14(1)`, `14(2)`
-batch showed 2026-09-14 marked inferred on pages 2 and 3 (page 2 with the
-store-code mark too). All three pages were confirmed, so ITPH1982020 is now
-in the DB (8 + 15 + 13 = 36 items). Release together with server #31.
+**In flight (2026-10-15): #67, cross-check the Inv. Tran. No. across
+pages** (uncommitted on its branch; server #33 alongside). Pages of one
+print run share a delivery code, and a page that misreads it (e.g.
+`ITPH1978G04`) used to save as a second, bogus delivery.
+- Server #33: `/api/ocr/reconcile` fills a blank `delivery_code` from
+  sibling pages (same `printout_datetime`) that agree, flagged
+  `delivery_code_inferred`, like the date. A read code is never changed.
+- Frontend: `BatchPage.deliveryCodeInferred` (`?? false` for an older
+  server) gives the code field the dashed inferred outline.
+  `upload/lib/sibling-delivery-codes.ts` lists the codes the page's
+  siblings stand at — an already-saved sibling counts with the code it was
+  saved under, so fixing page 1 doesn't then flag page 2. `useDeliveryDraft`
+  (new `siblingDeliveryCodes` argument, fed by `useSiblingDeliveryCodes`)
+  exposes `deliveryCodeConflict` / `deliveryCodeKept` / `keepDeliveryCode`.
+  The review screen shows a red "Doesn't match the other pages" alert with
+  "Use <code>" and "This page is right" buttons, and **Confirm stays
+  disabled** until the code matches or is kept. Comparison is exact after
+  trimming, matching the backend's delivery key.
+- Also: a **blank Inv. Tran. No. blocks Confirm** (`missingDeliveryCode`,
+  "Inv. Tran. No. is required — copy it from the receipt."). It used to be
+  sent and come back as the backend's 400.
+- Unit- and hook-tested (frontend 243/243, server 52/52). Checked in the
+  browser 2026-10-15 at 500px against the local server with #33, using the
+  `14` + `14(1)` batch. Page 1 read ITPH1982020 with no alert. Retyping it
+  as `ITPH1982O20` showed the alert, and Confirm was disabled. "Use
+  ITPH1982020" fixed the code and re-enabled Confirm. "This page is right"
+  showed "Kept", and editing that code brought the alert back. Clearing the
+  field showed the required message. Nothing was confirmed in that pass.
+- **A later page after an earlier one was saved under a corrected code**
+  was checked with a real save the same day. ITPH1982020 (only test data
+  from earlier that day) was deleted first. Then `14` + `14(1)` were
+  uploaded, with `14`'s `/api/ocr` answer patched in the tab to read
+  `ITPH1982O20`. Page 1 showed the alert; "Use ITPH1982020" + Confirm saved
+  8 items. Page 2's only sibling was page 1 (read as `ITPH1982O20`), and it
+  showed no alert because page 1 now counted with its saved code. Typing
+  `ITPH1982O20` on page 2 brought the alert back, naming `ITPH1982020`.
+  Page 2 saved 15 items. `14(2)` was then uploaded alone (date typed by
+  hand) and saved 13, so ITPH1982020 is back at 36 items. Still not seen
+  live: an inferred (blank-filled) code, since no sample has a blank one;
+  unit-tested. Release together with server #33.
 
-Same batch of uncommitted changes: **each upload screen now opens at the
-top.** Confirming a page used to open the next page scrolled part-way down
-(the window kept the old page's scroll position). `useScrollToTop`
-(`upload/hooks/use-scroll-to-top.ts`) runs when a page mounts, when it
-switches between review and result, and for the partial-batch and summary
-screens. Checked in the browser by logging `scrollTo` calls on "Skip to next
-page" (same remount as a clean save).
+#65 (inferred Transaction date, plus each upload screen opening at the top)
+merged into `develop` in PR #66.
 
 **Released.** `production` (Vercel, https://a-creates-inv-helper.vercel.app)
 was first merged from `develop` on 2026-10-13 (PR #57), then again with #58
@@ -190,9 +211,6 @@ Follow-ups from that pass, also done 2026-10-07:
 These are tracked in the server's `AI_DOCS/backend-left-to-do.md`, last
 scanned 2026-10-15. The ones that touch this repo:
 
-- **Reconcile doesn't cross-check `delivery_code`** (server §3). A page with
-  a misread Inv. Tran. No. saves as a second, bogus delivery. Needs a
-  contract decision (flag only, or also fill) and a review-screen warning.
 - **Printed totals partly missed** for `17.jpg` (server §3): only
   `total_value` came back, so a wrong Qty still shows "Matches the totals
   printed on the receipt." Still true on 2026-10-14 for `17`, `17(2)` and
@@ -218,9 +236,6 @@ scanned 2026-10-15. The ones that touch this repo:
 
 - Rejected rows (an item code already saved on an earlier page of the same
   delivery) — no sample triggered one.
-- Saving a delivery note (#49) against the real backend: the server's list
-  (its "Already handled", delivery note) says a real save from the frontend
-  hasn't been tried. Once it has, delete the line there too.
 - "Load more" (needs > 15 delivery groups; DB has 3), and a true ≤ 375px
   viewport. (Light mode was checked 2026-10-07 — see "Light mode (#18)
   contrast" above; the partial-batch and batch-summary screens weren't

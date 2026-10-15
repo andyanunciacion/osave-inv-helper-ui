@@ -8,6 +8,7 @@ import { summarizeDraft, type DraftSummary } from "../lib/draft-summary";
 import { checkReceiptTotals, type TotalsCheck } from "../lib/receipt-totals";
 import { findRepeatedItems, type RepeatedItemGroup, type RowRepeat } from "../lib/repeated-items";
 import { describeSaveError } from "../lib/save-error";
+import { deliveryCodeMismatch } from "../lib/sibling-delivery-codes";
 import type { DraftHeader, DraftItem, OcrResult } from "../types";
 
 // §6 flow B step 4-5: the review/edit screen's state. Seeded from the OCR
@@ -50,6 +51,17 @@ export interface UseDeliveryDraftResult {
   // Same for the Transaction date: the backend rejects a blank one (400),
   // and a later page of a batch can come back without it.
   missingDeliveryDate: boolean;
+  // Same for the Inv. Tran. No. — the backend rejects a blank one (400), and
+  // without it there's no delivery to save the rows under.
+  missingDeliveryCode: boolean;
+  // The codes other pages of this receipt read, when this page's Inv. Tran.
+  // No. matches none of them (likely a misread — saving it would create a
+  // second delivery); [] otherwise. Blocks saving until the code is changed
+  // to match or staff keep it (keepDeliveryCode).
+  deliveryCodeConflict: string[];
+  // Staff kept this page's code although the other pages read a different
+  // one.
+  deliveryCodeKept: boolean;
   // Rows with numbers/code but no description. Dropping them silently would
   // lose data, so they block saving until named or removed.
   unnamedRowCount: number;
@@ -72,6 +84,9 @@ export interface UseDeliveryDraftResult {
   result: CreateDeliveryResult | null;
   submitError: string | null;
   updateHeaderField: (field: keyof DraftHeader, value: string) => void;
+  // "This page is right": accept the current code despite the other pages.
+  // Only that exact code — editing it afterwards checks again.
+  keepDeliveryCode: () => void;
   updateItemField: (localId: string, field: DraftItemField, value: string) => void;
   addItem: () => void;
   removeItem: (localId: string) => void;
@@ -143,12 +158,16 @@ function missingFirst(items: DraftItem[]): DraftItem[] {
   return [...incomplete, ...items.filter((item) => blankFieldsOf(item).length === 0)];
 }
 
+// `siblingDeliveryCodes`: the Inv. Tran. Nos. the other pages of the same
+// print run stand at (useSiblingDeliveryCodes) — [] for a single photo.
 export function useDeliveryDraft(
   ocrResult: OcrResult,
   sessionStoreCode: string,
+  siblingDeliveryCodes: string[] = [],
 ): UseDeliveryDraftResult {
   const [header, setHeader] = useState<DraftHeader>(ocrResult.header);
   const [items, setItems] = useState<DraftItem[]>(() => missingFirst(ocrResult.items.map(withAutoTotal)));
+  const [keptDeliveryCode, setKeptDeliveryCode] = useState<string | null>(null);
   const [stage, setStage] = useState<DraftStage>("editing");
   const [result, setResult] = useState<CreateDeliveryResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -157,7 +176,12 @@ export function useDeliveryDraft(
   const receiptStoreCode = header.receipt_store_code.trim().toUpperCase();
   const missingReceiptStoreCode = !receiptStoreCode;
   const missingDeliveryDate = isBlank(header.delivery_date);
+  const missingDeliveryCode = isBlank(header.delivery_code);
   const storeMismatch = Boolean(receiptStoreCode) && receiptStoreCode !== sessionStoreCode.trim().toUpperCase();
+
+  const mismatchedSiblingCodes = deliveryCodeMismatch(header.delivery_code, siblingDeliveryCodes);
+  const deliveryCodeKept = mismatchedSiblingCodes.length > 0 && keptDeliveryCode === header.delivery_code.trim();
+  const deliveryCodeConflict = deliveryCodeKept ? [] : mismatchedSiblingCodes;
 
   const repeatedItems = useMemo(() => findRepeatedItems(items), [items]);
 
@@ -205,6 +229,8 @@ export function useDeliveryDraft(
     !storeMismatch &&
     !missingReceiptStoreCode &&
     !missingDeliveryDate &&
+    !missingDeliveryCode &&
+    deliveryCodeConflict.length === 0 &&
     unnamedRowCount === 0 &&
     blankFieldCount === 0 &&
     items.length > 0;
@@ -212,6 +238,10 @@ export function useDeliveryDraft(
   const updateHeaderField = useCallback((field: keyof DraftHeader, value: string) => {
     setHeader((prev) => ({ ...prev, [field]: value }));
   }, []);
+
+  const keepDeliveryCode = useCallback(() => {
+    setKeptDeliveryCode(header.delivery_code.trim());
+  }, [header.delivery_code]);
 
   // A cell the user typed is no longer "calculated". Editing Qty, Unit/Box or
   // Price refreshes a blank or calculated Total; editing the Total itself
@@ -292,6 +322,9 @@ export function useDeliveryDraft(
     storeMismatch,
     missingReceiptStoreCode,
     missingDeliveryDate,
+    missingDeliveryCode,
+    deliveryCodeConflict,
+    deliveryCodeKept,
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
@@ -302,6 +335,7 @@ export function useDeliveryDraft(
     result,
     submitError,
     updateHeaderField,
+    keepDeliveryCode,
     updateItemField,
     addItem,
     removeItem,

@@ -56,6 +56,8 @@ interface ReviewStepProps {
   receiptStoreCodeInferred?: boolean;
   // Same, for a Transaction date that was blank in the photo.
   deliveryDateInferred?: boolean;
+  // Same, for an Inv. Tran. No. that was blank in the photo.
+  deliveryCodeInferred?: boolean;
 }
 
 // Thin: renders the draft header + item rows. All editing/validation logic
@@ -69,6 +71,7 @@ export function ReviewStep({
   hasSavedPages = false,
   receiptStoreCodeInferred,
   deliveryDateInferred,
+  deliveryCodeInferred,
 }: ReviewStepProps) {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const {
@@ -77,6 +80,9 @@ export function ReviewStep({
     storeMismatch,
     missingReceiptStoreCode,
     missingDeliveryDate,
+    missingDeliveryCode,
+    deliveryCodeConflict,
+    deliveryCodeKept,
     unnamedRowCount,
     blankFieldCount,
     totalsCheck,
@@ -86,6 +92,7 @@ export function ReviewStep({
     stage,
     submitError,
     updateHeaderField,
+    keepDeliveryCode,
     updateItemField,
     addItem,
     removeItem,
@@ -117,12 +124,56 @@ export function ReviewStep({
           <Input
             id="delivery-code"
             value={header.delivery_code}
+            aria-invalid={missingDeliveryCode || deliveryCodeConflict.length > 0}
+            className={cn(
+              deliveryCodeInferred && !missingDeliveryCode && deliveryCodeConflict.length === 0 && INFERRED_CLASS,
+            )}
             onChange={(event) => updateHeaderField("delivery_code", event.target.value)}
           />
-          <p className="text-xs text-muted-foreground">
-            This is the primary identifier — double-check it against the receipt.
-          </p>
+          {missingDeliveryCode ? (
+            <p className="text-xs text-destructive">
+              Inv. Tran. No. is required — copy it from the receipt.
+            </p>
+          ) : deliveryCodeConflict.length > 0 ? null : deliveryCodeKept ? (
+            <p className="text-xs text-muted-foreground">
+              Kept — differs from the other pages of this receipt.
+            </p>
+          ) : deliveryCodeInferred ? (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Sparkles className="size-3 shrink-0" aria-hidden="true" />
+              Couldn&apos;t be read on this photo — filled in from another page in this batch.
+              Double-check it.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              This is the primary identifier — double-check it against the receipt.
+            </p>
+          )}
         </div>
+
+        {deliveryCodeConflict.length > 0 ? (
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertTitle>Doesn&apos;t match the other pages</AlertTitle>
+            <AlertDescription>
+              <p>
+                Other pages of this receipt read {deliveryCodeConflict.join(" or ")}. Saving a
+                different code creates a separate delivery — check it against the paper.
+              </p>
+              <div className="mt-2 flex w-full flex-col gap-2 sm:flex-row">
+                {deliveryCodeConflict.map((code) => (
+                  <Button key={code} type="button" onClick={() => updateHeaderField("delivery_code", code)}>
+                    Use {code}
+                  </Button>
+                ))}
+                {/* The alert's red text would otherwise make this read as destructive. */}
+                <Button type="button" variant="outline" className="text-foreground" onClick={keepDeliveryCode}>
+                  This page is right
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
