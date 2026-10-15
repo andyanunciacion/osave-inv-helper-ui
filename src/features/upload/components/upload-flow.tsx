@@ -6,6 +6,7 @@ import { useStoreSession } from "@/features/store-session/hooks/use-store-sessio
 import { useDeliveryDraft } from "../hooks/use-delivery-draft";
 import { useOcrCapture } from "../hooks/use-ocr-capture";
 import { useScrollToTop } from "../hooks/use-scroll-to-top";
+import { useSiblingDeliveryCodes } from "../hooks/use-sibling-delivery-codes";
 import { useUploadBatch } from "../hooks/use-upload-batch";
 import { savedPageNotice } from "../lib/merged-items";
 import type { OcrResult } from "../types";
@@ -35,6 +36,7 @@ export function UploadFlow() {
     reset: capture.reset,
   });
   const { savedPages, startOver } = batch;
+  const siblingDeliveryCodes = useSiblingDeliveryCodes(pages, currentIndex, savedPages);
   // Each page's own review/result screen is handled in DraftReview.
   useScrollToTop(batch.finished ? "summary" : status === "partial" ? "partial" : "pages");
 
@@ -83,6 +85,8 @@ export function UploadFlow() {
       ocrResult={currentPage.ocrResult}
       receiptStoreCodeInferred={currentPage.receiptStoreCodeInferred}
       deliveryDateInferred={currentPage.deliveryDateInferred}
+      deliveryCodeInferred={currentPage.deliveryCodeInferred}
+      siblingDeliveryCodes={siblingDeliveryCodes}
       storeCode={storeCode ?? ""}
       pageLabel={pages.length > 1 ? `Page ${currentIndex + 1} of ${pages.length}` : null}
       savedNotice={previousSaved ? savedPageNotice(currentIndex, previousSaved.result) : null}
@@ -101,6 +105,8 @@ function DraftReview({
   ocrResult,
   receiptStoreCodeInferred,
   deliveryDateInferred,
+  deliveryCodeInferred,
+  siblingDeliveryCodes,
   storeCode,
   pageLabel,
   savedNotice,
@@ -115,6 +121,8 @@ function DraftReview({
   ocrResult: OcrResult;
   receiptStoreCodeInferred: boolean;
   deliveryDateInferred: boolean;
+  deliveryCodeInferred: boolean;
+  siblingDeliveryCodes: string[];
   storeCode: string;
   pageLabel: string | null;
   savedNotice: string | null;
@@ -126,7 +134,7 @@ function DraftReview({
   onSkip: () => void;
   onCancel: () => void;
 }) {
-  const draft = useDeliveryDraft(ocrResult, storeCode);
+  const draft = useDeliveryDraft(ocrResult, storeCode, siblingDeliveryCodes);
   const { stage, result } = draft;
   const showResult = stage === "submitted" && result !== null && result.status !== "success";
   // Keyed per page (see UploadFlow), so this also runs for each new page.
@@ -162,6 +170,7 @@ function DraftReview({
       hasSavedPages={hasSavedPages}
       receiptStoreCodeInferred={receiptStoreCodeInferred}
       deliveryDateInferred={deliveryDateInferred}
+      deliveryCodeInferred={deliveryCodeInferred}
       onCancel={onCancel}
     />
   );

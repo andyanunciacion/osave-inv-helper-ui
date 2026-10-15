@@ -94,6 +94,58 @@ describe("useDeliveryDraft", () => {
     expect(result.current.stage).toBe("editing");
   });
 
+  it("blocks confirming a delivery code that disagrees with the other pages until it's fixed", () => {
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ delivery_code: "INV-DRAFT-I" }), "STORE1", ["INV-DRAFT-1"]),
+      { wrapper },
+    );
+    expect(result.current.deliveryCodeConflict).toEqual(["INV-DRAFT-1"]);
+    expect(result.current.canConfirm).toBe(false);
+
+    act(() => result.current.updateHeaderField("delivery_code", "INV-DRAFT-1"));
+    expect(result.current.deliveryCodeConflict).toEqual([]);
+    expect(result.current.deliveryCodeKept).toBe(false);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("lets staff keep a disagreeing delivery code — only that exact code", () => {
+    const { result } = renderHook(
+      () => useDeliveryDraft(ocrResult({ delivery_code: "INV-DRAFT-2" }), "STORE1", ["INV-DRAFT-1"]),
+      { wrapper },
+    );
+    act(() => result.current.keepDeliveryCode());
+    expect(result.current.deliveryCodeConflict).toEqual([]);
+    expect(result.current.deliveryCodeKept).toBe(true);
+    expect(result.current.canConfirm).toBe(true);
+
+    act(() => result.current.updateHeaderField("delivery_code", "INV-DRAFT-3"));
+    expect(result.current.deliveryCodeConflict).toEqual(["INV-DRAFT-1"]);
+    expect(result.current.deliveryCodeKept).toBe(false);
+    expect(result.current.canConfirm).toBe(false);
+  });
+
+  it("requires the Inv. Tran. No. — a blank one blocks confirming until it's typed", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult({ delivery_code: " " }), "STORE1"), {
+      wrapper,
+    });
+    expect(result.current.missingDeliveryCode).toBe(true);
+    expect(result.current.canConfirm).toBe(false);
+
+    createDeliveryRequest.mockClear();
+    act(() => result.current.confirm());
+    expect(createDeliveryRequest).not.toHaveBeenCalled();
+
+    act(() => result.current.updateHeaderField("delivery_code", "INV-DRAFT-1"));
+    expect(result.current.missingDeliveryCode).toBe(false);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
+  it("has no delivery code conflict without sibling pages", () => {
+    const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+    expect(result.current.deliveryCodeConflict).toEqual([]);
+    expect(result.current.canConfirm).toBe(true);
+  });
+
   it("requires the receipt's store code — a blank one blocks confirming until it's typed", () => {
     const { result } = renderHook(
       () => useDeliveryDraft(ocrResult({ receipt_store_code: "" }), "STORE1"),

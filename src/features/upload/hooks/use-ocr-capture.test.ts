@@ -16,7 +16,12 @@ vi.mock("../lib/api", async (importOriginal) => ({
 const file = (name = "receipt.jpg") => new File(["x"], name, { type: "image/jpeg" });
 
 function ocrApiResponse(
-  overrides: Partial<{ receipt_store_code: string; printout_datetime: string; delivery_date: string }> = {},
+  overrides: Partial<{
+    receipt_store_code: string;
+    printout_datetime: string;
+    delivery_date: string;
+    delivery_code: string;
+  }> = {},
 ) {
   return {
     header: {
@@ -254,6 +259,23 @@ describe("useOcrCapture", () => {
     expect(result.current.pages[1].ocrResult.header.delivery_date).toBe("2026-08-17");
   });
 
+  it("takes a delivery code reconcile filled in from a sibling page, flagged as inferred", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockResolvedValueOnce(ocrApiResponse({ delivery_code: "" }));
+    runOcrReconcile.mockResolvedValue([
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, delivery_code_inferred: false, store_mismatch: false },
+      { ...ocrApiResponse().header, receipt_store_code_inferred: false, delivery_code_inferred: true, store_mismatch: false },
+    ]);
+
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("a.jpg"), file("b.jpg")], "245"));
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.pages.map((p) => p.deliveryCodeInferred)).toEqual([false, true]);
+    expect(result.current.pages[1].ocrResult.header.delivery_code).toBe(ocrApiResponse().header.delivery_code);
+  });
+
   it("treats a reconcile answer without delivery_date_inferred as not inferred", async () => {
     runOcr.mockResolvedValue(ocrApiResponse());
     runOcrReconcile.mockResolvedValue([
@@ -266,6 +288,7 @@ describe("useOcrCapture", () => {
 
     await waitFor(() => expect(result.current.status).toBe("done"));
     expect(result.current.pages.map((p) => p.deliveryDateInferred)).toEqual([false, false]);
+    expect(result.current.pages.map((p) => p.deliveryCodeInferred)).toEqual([false, false]);
   });
 
   it("pauses on `partial` when some photos fail, keeping the ones that were read", async () => {
