@@ -273,34 +273,40 @@ usable meanwhile. Needed:
   mid-OCR and land on the review screen when it resolves? Can they start a
   second capture while one is still processing?
 
-## 4. Offline queue / IndexedDB (§8)
+## 4. Offline mode (§8) — read-only, decided 2026-10-17
 
-`idb` is an installed dependency but **unused anywhere in `src/`** (re-checked
-2026-10-15). Needed:
+**Decision (2026-10-17):** offline mode is *read-only*. Staff see the data
+last fetched while they had a connection; nothing is sent to the server
+while offline. This replaces §8's offline-capture plan (photos held in
+IndexedDB and uploaded when the connection returns) — no offline upload
+queue. `idb` is still unused in `src/`. Needed:
 
-- IndexedDB-backed queue (e.g. `features/upload/lib/offline-queue.ts`)
-  holding captured photos temporarily when offline, per §8 — treated as a
-  *buffer*, not durable storage (iOS can evict it after extended inactivity —
-  see §9).
-- Wire `src/hooks/use-online-status.ts` (exists already) into the capture
-  flow: hold-and-retry instead of failing outright when offline.
-- Foreground/visibility-change retry trigger (§8/§9 — no Background Sync API
-  on iOS Safari).
-- Builds on §3's queue — do that first.
+- Persist the TanStack Query cache (e.g. `@tanstack/query-persist-client`
+  with an IndexedDB persister via `idb`) so search/recent deliveries load
+  offline from the last successful fetch, with a "last updated" note. Clear
+  it on sign-out / store switch so one store's data never shows under
+  another.
+- Block uploads offline: capture/confirm (and quantity/note edits) disabled
+  with a "needs a connection" message, using `src/hooks/use-online-status.ts`
+  (or Next's `useOffline`, which also catches Wi-Fi with no internet).
+- Needs §5's service worker so the app itself opens offline.
 
 ## 5. PWA (§9)
 
-Nothing exists yet — `public/` has only the Next.js starter SVGs (the company
-logo was removed in #18), no manifest or service worker (re-checked
-2026-10-15). Needed:
+**Installable — done in #71 (2026-10-17):** `src/app/manifest.ts`
+(`start_url: "/search"`), install icons rendered by
+`src/app/icons/[file]/route.ts` (192/512 + maskable 512) and
+`src/app/apple-icon.tsx`, both drawn by `src/lib/app-icon.tsx`; install tip
+(`src/features/install/`) on the sign-in page and `/search` — Chrome/Android
+get an Install button (`beforeinstallprompt`), iOS gets Add to Home Screen
+steps; hidden when installed or dismissed. Note: the installed iPhone app
+doesn't share Safari's localStorage, so staff sign in once more inside it.
 
-- Web app manifest (name, icons, `display: standalone`, theme color). Check
-  `node_modules/next/dist/docs/` for this Next.js version's `app/manifest.ts`
-  convention before hand-writing `public/manifest.json`.
+Still needed (with §4):
+
 - Service worker — network-first for API calls, cache-first for static
-  assets.
-- Icons (multiple sizes).
-- iOS "Add to Home Screen" nudge (no native install prompt on iOS Safari).
+  assets, plus the app shell so it opens offline. The Next docs point to
+  Serwist (has a Turbopack integration).
 
 ## 6. Realtime multi-user sync (§8, roadmap phase 4)
 

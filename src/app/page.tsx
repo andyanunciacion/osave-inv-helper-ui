@@ -1,4 +1,5 @@
 import { Boxes } from "lucide-react";
+import { InstallTip } from "@/features/install/components/install-tip";
 import { StoreCodeForm } from "@/features/store-session/components/store-code-form";
 
 export default function Home() {
@@ -10,9 +11,14 @@ export default function Home() {
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">Inventory Helper</h1>
       </div>
-      <main className="flex w-full max-w-md flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
-        <StoreCodeForm />
-      </main>
+      <div className="flex w-full max-w-md flex-col gap-4">
+        <main className="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
+          <StoreCodeForm />
+        </main>
+        {/* Installing before signing in saves a second sign-in: the installed
+            iPhone app doesn't share Safari's saved store session. */}
+        <InstallTip />
+      </div>
     </div>
   );
 }

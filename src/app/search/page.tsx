@@ -1,3 +1,4 @@
+import { InstallTip } from "@/features/install/components/install-tip";
 import { RequireStoreSession } from "@/features/store-session/components/require-store-session";
 import { StoreSessionFooter } from "@/features/store-session/components/store-session-footer";
 import { SearchHeader } from "@/features/search/components/search-header";
@@ -12,6 +13,7 @@ export default function SearchPage() {
           <main className="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
             <SearchPanel />
           </main>
+          <InstallTip />
           <StoreSessionFooter />
         </div>
       </div>

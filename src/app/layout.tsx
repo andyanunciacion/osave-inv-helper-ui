@@ -16,6 +16,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Inventory Helper",
   description: "Delivery receipt scanning and inventory search for store staff",
+  // The name under the iPhone home-screen icon (manifest.ts's short_name).
+  appleWebApp: { title: "Inventory" },
 };
 
 // Mobile-first PWA target (AI_DOCS/main-file.md §9): viewportFit "cover"
