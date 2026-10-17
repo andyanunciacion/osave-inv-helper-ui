@@ -352,7 +352,11 @@ holding an unlocked phone with the app has that store's access. There's no
   the store's passcode and checks it with the backend before saving it; every
   backend call goes through `backendFetch` (`src/lib/api-client.ts`), which
   sends both and forgets a refused passcode, so the guard sends staff back
-  to re-enter it. A QR scan fills in only the store code.
+  to re-enter it.
+- **Store sign-in QR code** (`frontend-contract.md` §10): the QR holds the
+  store code + passcode as JSON and signs in straight to `/search`
+  (`useQrSignIn`); a refused or code-only QR goes to the store screen for
+  the passcode. The backend's `npm run store:passcode` makes the QR.
 - **Backend wiring (#16):** sample store removed; `features/deliveries/lib/api.ts`
   and `features/upload/lib/api.ts` call the real backend through TanStack
   Query hooks.
