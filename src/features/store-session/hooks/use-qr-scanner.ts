@@ -120,6 +120,7 @@ export function useQrScanner({
           const value = barcodes[0]?.rawValue;
           if (value) {
             stopStream();
+            setStatus("idle");
             onDecode(value);
             return;
           }
@@ -143,6 +144,7 @@ export function useQrScanner({
           if (!result) return;
           controls.stop();
           controlsRef.current = null;
+          setStatus("idle");
           onDecode(result.getText());
         })
         .then((controls) => {

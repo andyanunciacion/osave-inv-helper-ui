@@ -3,30 +3,32 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, ImageUp } from "lucide-react";
+import { ArrowLeft, Camera, ImageUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useStoreSession } from "../hooks/use-store-session";
 import { useQrScanner } from "../hooks/use-qr-scanner";
+import { useQrSignIn } from "../hooks/use-qr-sign-in";
 
 // Thin: local file-input ref only. Scan lifecycle + decode logic live in
-// useQrScanner; session persistence lives in useStoreSession. The QR code
-// only carries the store code, so a scan fills it in and goes back to the
-// store screen for the passcode.
+// useQrScanner; reading the QR code and signing in live in useQrSignIn. A
+// store's sign-in QR code goes straight on to search; one that still needs
+// the passcode goes back to the store screen for it.
 export function QrScanView() {
   const router = useRouter();
-  const { chooseStore } = useStoreSession();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { signInWithQr, signingInStoreCode, errorMessage: qrErrorMessage } = useQrSignIn();
 
   const { videoRef, status, errorMessage, startCamera, stopCamera, decodeImageFile } =
     useQrScanner({
-      onDecode: (code) => {
-        chooseStore(code);
-        router.push("/");
+      onDecode: async (raw) => {
+        const outcome = await signInWithQr(raw);
+        if (outcome === "signed-in") router.push("/search");
+        else if (outcome === "needs-passcode") router.push("/");
       },
     });
 
   const isScanning = status === "scanning" || status === "requesting-camera";
+  const isSigningIn = signingInStoreCode !== null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,9 +57,19 @@ export function QrScanView() {
           playsInline
         />
         {!isScanning && (
-          <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-muted-foreground">
-            {status === "camera-error" ? (
+          <div
+            className="flex flex-col items-center gap-2 p-6 text-center text-sm text-muted-foreground"
+            aria-live="polite"
+          >
+            {isSigningIn ? (
+              <>
+                <Loader2 className="size-6 animate-spin" aria-hidden="true" />
+                <p>Signing in to store {signingInStoreCode}…</p>
+              </>
+            ) : status === "camera-error" ? (
               <p className="text-destructive">{errorMessage}</p>
+            ) : status === "idle" && qrErrorMessage ? (
+              <p className="text-destructive">{qrErrorMessage}</p>
             ) : (
               <p>Point your camera at the store&apos;s QR code.</p>
             )}
@@ -77,14 +89,15 @@ export function QrScanView() {
             Cancel
           </Button>
         ) : (
-          <Button type="button" onClick={startCamera}>
+          <Button type="button" onClick={startCamera} disabled={isSigningIn}>
             <Camera className="size-4" aria-hidden="true" />
-            Enable camera
+            {status === "idle" && qrErrorMessage ? "Scan again" : "Enable camera"}
           </Button>
         )}
         <Button
           type="button"
           variant="outline"
+          disabled={isSigningIn}
           onClick={() => fileInputRef.current?.click()}
         >
           <ImageUp className="size-4" aria-hidden="true" />

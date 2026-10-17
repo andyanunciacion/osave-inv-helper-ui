@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { saveStoreSession } from "@/lib/store-session-storage";
+import { setQrSignInProblem } from "../lib/qr-sign-in-problem";
 import { useStoreSignIn } from "./use-store-sign-in";
 
 const { verifyStoreAccess } = vi.hoisted(() => ({ verifyStoreAccess: vi.fn() }));
@@ -25,6 +26,7 @@ describe("useStoreSignIn", () => {
   beforeEach(() => {
     window.localStorage.clear();
     verifyStoreAccess.mockReset();
+    setQrSignInProblem(null);
   });
 
   it("saves the normalized store and passcode once the backend accepts them", async () => {
@@ -71,6 +73,16 @@ describe("useStoreSignIn", () => {
     expect(result.current.canReusePasscode("st01")).toBe(true);
     expect(await signIn(result, "st01", "")).toBe(true);
     expect(verifyStoreAccess).not.toHaveBeenCalled();
+  });
+
+  it("shows why a scanned QR code was refused until the next sign-in attempt", async () => {
+    setQrSignInProblem("Wrong passcode for store ST01.");
+    verifyStoreAccess.mockResolvedValue({ ok: true });
+    const { result } = renderHook(() => useStoreSignIn(), { wrapper });
+
+    expect(result.current.errorMessage).toBe("Wrong passcode for store ST01.");
+    await signIn(result, "ST01", "secret1");
+    expect(result.current.errorMessage).toBeNull();
   });
 
   it("needs a passcode for any other store", async () => {
