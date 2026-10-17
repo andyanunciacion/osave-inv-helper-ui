@@ -56,6 +56,7 @@ describe("useQrScanner", () => {
 
     expect(onDecode).toHaveBeenCalledWith("ST01");
     expect(stop).toHaveBeenCalled();
+    expect(result.current.status).toBe("idle");
   });
 
   it("surfaces a friendly message when camera permission is denied", async () => {
