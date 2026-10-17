@@ -336,8 +336,10 @@ replaces the passcode step in `store-session`. The item history panel (#23)
 will show more useful "who changed this" info once this exists.
 
 The passcode is kept in localStorage so staff don't retype it, so anyone
-holding an unlocked phone with the app has that store's access. There's no
-"sign out" button yet — choosing another store is the only way to drop it.
+holding an unlocked phone with the app has that store's access until someone
+taps "Sign out" below the `/search` card (`StoreSessionFooter` /
+`SignOutButton` / `useSignOut`), which clears
+the code, passcode and cached deliveries.
 
 ---
 
