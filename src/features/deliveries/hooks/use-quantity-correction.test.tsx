@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -89,5 +89,23 @@ describe("useQuantityCorrection", () => {
 
     expect(outcome).toBe("failed");
     expect(result.current.message).toEqual({ tone: "error", text: "Couldn't save that change — try again." });
+  });
+
+  it("sends nothing offline", async () => {
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => useQuantityCorrection(item), { wrapper });
+
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.submit("5", "recount");
+      });
+
+      expect(result.current.isOffline).toBe(true);
+      expect(outcome).toBe("offline");
+      expect(updateItemQuantity).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });

@@ -26,15 +26,20 @@ export function ResultsStatus({ status, onRetry }: ResultsStatusProps) {
     );
   }
 
-  // The query resumes on its own once the connection (or the page) is back,
-  // so this is a wait, not a failure. No Try again button: a manual refetch
-  // just rejoins the same paused fetch, so it would do nothing.
+  // Offline with no saved copy: a search already run on this phone would
+  // show its saved results instead (frontend-left-to-do.md §4). Never "No
+  // deliveries found", which would read as "not delivered". The query
+  // resumes on its own once the connection is back, so this is a wait, not a
+  // failure. No Try again button: a manual refetch just rejoins the same
+  // paused fetch, so it would do nothing.
   if (status === "offline") {
     return (
       <Alert role="status">
         <WifiOff />
-        <AlertTitle>Waiting for a connection</AlertTitle>
-        <AlertDescription>The search will run as soon as you&apos;re back online.</AlertDescription>
+        <AlertTitle>This search isn&apos;t saved on this phone</AlertTitle>
+        <AlertDescription>
+          Connect to search. It&apos;ll run by itself as soon as you&apos;re back online.
+        </AlertDescription>
       </Alert>
     );
   }

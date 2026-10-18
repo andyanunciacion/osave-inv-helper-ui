@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import type { DeliveryItem } from "@/types/schema";
 import { useUpdateItemQuantity } from "./use-update-item-quantity";
 
 // The quantity-correction form's rules (item-history-panel.tsx): parse and
 // validate the typed amount, skip the request when it matches what's
 // already saved, and turn the outcome into a message for the form.
-export type QuantityCorrectionOutcome = "saved" | "unchanged" | "invalid" | "failed";
+export type QuantityCorrectionOutcome = "saved" | "unchanged" | "invalid" | "offline" | "failed";
 
 export interface QuantityCorrectionMessage {
   tone: "error" | "info";
@@ -15,6 +16,8 @@ export interface QuantityCorrectionMessage {
 export interface UseQuantityCorrectionResult {
   submit: (draftQuantity: string, reason: string) => Promise<QuantityCorrectionOutcome>;
   isPending: boolean;
+  // Offline mode is read-only (frontend-left-to-do.md §4): nothing is sent.
+  isOffline: boolean;
   message: QuantityCorrectionMessage | null;
 }
 
@@ -27,8 +30,10 @@ function parseQuantity(draft: string): number | null {
 export function useQuantityCorrection(item: DeliveryItem): UseQuantityCorrectionResult {
   const { updateQuantity, isPending } = useUpdateItemQuantity();
   const [message, setMessage] = useState<QuantityCorrectionMessage | null>(null);
+  const isOffline = !useOnlineStatus();
 
   const submit = async (draftQuantity: string, reason: string): Promise<QuantityCorrectionOutcome> => {
+    if (isOffline) return "offline";
     const quantity = parseQuantity(draftQuantity);
     if (quantity === null) {
       setMessage({ tone: "error", text: "Enter a valid quantity" });
@@ -53,5 +58,5 @@ export function useQuantityCorrection(item: DeliveryItem): UseQuantityCorrection
     }
   };
 
-  return { submit, isPending, message };
+  return { submit, isPending, isOffline, message };
 }

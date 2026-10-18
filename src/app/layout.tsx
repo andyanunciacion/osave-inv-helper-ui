@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppUpdateBanner } from "@/features/app-update/components/app-update-banner";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -43,7 +44,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <AppUpdateBanner />
+        </Providers>
       </body>
     </html>
   );

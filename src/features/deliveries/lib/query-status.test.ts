@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toQueryStatus } from "./query-status";
+import { savedCopyTime, toQueryStatus } from "./query-status";
 
 const base = { data: undefined, isError: false, isLoading: false, isPaused: false };
 
@@ -30,5 +30,33 @@ describe("toQueryStatus", () => {
 
   it("keeps results on screen while a background refetch is paused", () => {
     expect(toQueryStatus({ ...base, data: [1], isPaused: true })).toBe("success");
+  });
+
+  it("is loading, not \"nothing found\", while the saved offline copy is read back", () => {
+    expect(toQueryStatus({ ...base, isRestoring: true })).toBe("loading");
+  });
+});
+
+describe("savedCopyTime", () => {
+  const fetched = { data: [1], dataUpdatedAt: 1_700_000_000_000, isError: false, isPaused: false, isOnline: true };
+
+  it("is null while the data is current", () => {
+    expect(savedCopyTime(fetched)).toBeNull();
+  });
+
+  it("is the fetch time when offline", () => {
+    expect(savedCopyTime({ ...fetched, isOnline: false })).toBe(fetched.dataUpdatedAt);
+  });
+
+  it("is the fetch time while the refresh is paused", () => {
+    expect(savedCopyTime({ ...fetched, isPaused: true })).toBe(fetched.dataUpdatedAt);
+  });
+
+  it("is the fetch time when the refresh failed (Wi-Fi with no internet)", () => {
+    expect(savedCopyTime({ ...fetched, isError: true })).toBe(fetched.dataUpdatedAt);
+  });
+
+  it("is null with nothing on screen", () => {
+    expect(savedCopyTime({ ...fetched, data: undefined, isOnline: false })).toBeNull();
   });
 });

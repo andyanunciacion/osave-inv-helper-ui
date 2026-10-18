@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { runOcr, runOcrReconcile, type OcrApiResponse } from "../lib/api";
 import { checkPhotoFile, toCaptureError, type CaptureError } from "../lib/capture-error";
 import type { OcrResult } from "../types";
@@ -55,6 +56,12 @@ export interface UseOcrCaptureResult {
   batchSize: number;
   readCount: number;
   failedPhotos: FailedPhoto[];
+  // Offline mode is read-only (frontend-left-to-do.md §4): photos aren't
+  // sent, and capturing/retrying does nothing until the connection is back.
+  isOffline: boolean;
+  // `continueWithRead` would go ahead: a single read page needs nothing from
+  // the server, but two or more are cross-checked online first.
+  canContinue: boolean;
   captureFiles: (files: File[], sessionStoreCode: string) => void;
   // Re-sends only the retryable failed photos; already-read ones aren't
   // sent again.
@@ -97,6 +104,7 @@ function toOutcome(file: File, settled: PromiseSettledResult<OcrApiResponse>): P
 }
 
 export function useOcrCapture(): UseOcrCaptureResult {
+  const isOffline = !useOnlineStatus();
   const [status, setStatus] = useState<CaptureStatus>("idle");
   const [error, setError] = useState<CaptureError | null>(null);
   const [pages, setPages] = useState<BatchPage[]>([]);
@@ -207,7 +215,7 @@ export function useOcrCapture(): UseOcrCaptureResult {
   // without being sent (a too-large photo is compressed first — runOcr).
   const captureFiles = useCallback(
     (files: File[], sessionStoreCode: string) => {
-      if (files.length === 0) return;
+      if (files.length === 0 || isOffline) return;
       storeCodeRef.current = sessionStoreCode;
       setError(null);
 
@@ -228,12 +236,12 @@ export function useOcrCapture(): UseOcrCaptureResult {
         );
       })();
     },
-    [readAll, settle],
+    [isOffline, readAll, settle],
   );
 
   const retryFailed = useCallback(() => {
     const toRetry = outcomes.filter((o) => o.error?.retryable);
-    if (toRetry.length === 0) return;
+    if (toRetry.length === 0 || isOffline) return;
     setStatus("processing");
 
     void (async () => {
@@ -245,14 +253,17 @@ export function useOcrCapture(): UseOcrCaptureResult {
         }),
       );
     })();
-  }, [outcomes, readAll, settle]);
+  }, [isOffline, outcomes, readAll, settle]);
+
+  const readCount = outcomes.filter((o) => o.result).length;
+  // Two or more pages are cross-checked by /api/ocr/reconcile first.
+  const canContinue = readCount > 0 && !(readCount > 1 && isOffline);
 
   const continueWithRead = useCallback(() => {
-    const read = outcomes.flatMap((o) => (o.result ? [o.result] : []));
-    if (read.length === 0) return;
+    if (!canContinue) return;
     setStatus("processing");
-    void finish(read);
-  }, [outcomes, finish]);
+    void finish(outcomes.flatMap((o) => (o.result ? [o.result] : [])));
+  }, [canContinue, outcomes, finish]);
 
   const advance = useCallback(() => {
     setCurrentIndex((i) => Math.min(i + 1, pages.length - 1));
@@ -280,8 +291,10 @@ export function useOcrCapture(): UseOcrCaptureResult {
     currentPage: pages[currentIndex] ?? null,
     isLastPage: currentIndex >= pages.length - 1,
     batchSize: outcomes.length,
-    readCount: outcomes.filter((o) => o.result).length,
+    readCount,
     failedPhotos,
+    isOffline,
+    canContinue,
     captureFiles,
     retryFailed,
     continueWithRead,

@@ -12,7 +12,7 @@ interface RecentUploadsBarProps {
 // Thin: calls the recent-uploads data hook and renders a vertically
 // scrollable quick-select list. No logic of its own beyond that call.
 export function RecentUploadsBar({ onSelect }: RecentUploadsBarProps) {
-  const { uploads, isLoading } = useRecentUploads();
+  const { uploads, isLoading, savedAt } = useRecentUploads();
 
   // Placeholder rows while loading, so the bar doesn't pop in and push the
   // date chips down under a thumb that's already reaching for them.
@@ -35,6 +35,9 @@ export function RecentUploadsBar({ onSelect }: RecentUploadsBarProps) {
     <div className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">
         Recent uploads
+        {savedAt !== null ? (
+          <span className="font-normal"> · saved {format(savedAt, "MMM d, h:mm a")}</span>
+        ) : null}
       </span>
       <div className="flex max-h-48 flex-col gap-2 overflow-y-auto py-0.5 pr-0.5">
         {uploads.map((upload) => (

@@ -1,9 +1,9 @@
 # Frontend — Left To Do
 
 Reference doc for what's left to finish the frontend. Last updated
-2026-10-15 against `65-reconcile-doesnt-fill-a-blank-delivery_date-from-sibling-pages`
-(off `develop` at `1c60166`; `npm test` 230/230 passing). Previous scans:
-2026-10-08, 2026-10-07, 2026-09-25, 2026-09-16. Companion to
+2026-10-18 against `78-offline-mode` (off `develop` at `0bd9be5`; `npm test`
+307/307 passing). Previous scans: 2026-10-15, 2026-10-08, 2026-10-07,
+2026-09-25, 2026-09-16. Companion to
 `AI_DOCS/main-file.md` (plan/domain rules) and `AI_DOCS/frontend-contract.md`
 (backend API shape as the frontend expects it). Re-verify against current
 code before trusting this — it's a point-in-time snapshot, not live state.
@@ -14,61 +14,24 @@ in-memory sample store and mock OCR were removed in #16/#19. Issue branches
 (`<n>-<slug>`) merge into `develop`; `develop` is merged into `production`
 to release.
 
-**In flight (2026-10-15): #67, cross-check the Inv. Tran. No. across
-pages** (uncommitted on its branch; server #33 alongside). Pages of one
-print run share a delivery code, and a page that misreads it (e.g.
-`ITPH1978G04`) used to save as a second, bogus delivery.
-- Server #33: `/api/ocr/reconcile` fills a blank `delivery_code` from
-  sibling pages (same `printout_datetime`) that agree, flagged
-  `delivery_code_inferred`, like the date. A read code is never changed.
-- Frontend: `BatchPage.deliveryCodeInferred` (`?? false` for an older
-  server) gives the code field the dashed inferred outline.
-  `upload/lib/sibling-delivery-codes.ts` lists the codes the page's
-  siblings stand at — an already-saved sibling counts with the code it was
-  saved under, so fixing page 1 doesn't then flag page 2. `useDeliveryDraft`
-  (new `siblingDeliveryCodes` argument, fed by `useSiblingDeliveryCodes`)
-  exposes `deliveryCodeConflict` / `deliveryCodeKept` / `keepDeliveryCode`.
-  The review screen shows a red "Doesn't match the other pages" alert with
-  "Use <code>" and "This page is right" buttons, and **Confirm stays
-  disabled** until the code matches or is kept. Comparison is exact after
-  trimming, matching the backend's delivery key.
-- Also: a **blank Inv. Tran. No. blocks Confirm** (`missingDeliveryCode`,
-  "Inv. Tran. No. is required — copy it from the receipt."). It used to be
-  sent and come back as the backend's 400.
-- Unit- and hook-tested (frontend 243/243, server 52/52). Checked in the
-  browser 2026-10-15 at 500px against the local server with #33, using the
-  `14` + `14(1)` batch. Page 1 read ITPH1982020 with no alert. Retyping it
-  as `ITPH1982O20` showed the alert, and Confirm was disabled. "Use
-  ITPH1982020" fixed the code and re-enabled Confirm. "This page is right"
-  showed "Kept", and editing that code brought the alert back. Clearing the
-  field showed the required message. Nothing was confirmed in that pass.
-- **A later page after an earlier one was saved under a corrected code**
-  was checked with a real save the same day. ITPH1982020 (only test data
-  from earlier that day) was deleted first. Then `14` + `14(1)` were
-  uploaded, with `14`'s `/api/ocr` answer patched in the tab to read
-  `ITPH1982O20`. Page 1 showed the alert; "Use ITPH1982020" + Confirm saved
-  8 items. Page 2's only sibling was page 1 (read as `ITPH1982O20`), and it
-  showed no alert because page 1 now counted with its saved code. Typing
-  `ITPH1982O20` on page 2 brought the alert back, naming `ITPH1982020`.
-  Page 2 saved 15 items. `14(2)` was then uploaded alone (date typed by
-  hand) and saved 13, so ITPH1982020 is back at 36 items. Still not seen
-  live: an inferred (blank-filled) code, since no sample has a blank one;
-  unit-tested. Release together with server #33.
-
-#65 (inferred Transaction date, plus each upload screen opening at the top)
-merged into `develop` in PR #66.
+**In flight (2026-10-18): #78, offline mode** — the service worker first
+(§5), then the read-only offline mode it enables (§4).
 
 **Released.** `production` (Vercel, https://a-creates-inv-helper.vercel.app)
-was first merged from `develop` on 2026-10-13 (PR #57), then again with #58
-and #60 (PR #62, 2026-10-14). It holds everything on `develop` up to #60.
-The server (Railway) is released to the same point; its pre-launch checklist
-(real passcode for store 245, `TRUST_PROXY`, `ALLOWED_ORIGINS`) is in the
+holds everything on `develop` up to #71 (PR #77). Since the 2026-10-15
+scan that added #67 (Inv. Tran. No. cross-checked across a batch's pages,
+PR #68), #53 (sign in from a store QR code, PR #74), #70 (sign out, PR #75)
+and #71 (installable app, PR #76). The server (Railway) is released through
+its #33 (blank delivery code filled from sibling pages, which #67 needs),
+#38 (QR code) and #36 (request logging). Its pre-launch checklist (real
+passcode for store 245, `TRUST_PROXY`, `ALLOWED_ORIGINS`) is in the
 server's `AI_DOCS/backend-left-to-do.md` §1.
 
-Items 3–5 were re-checked against code on 2026-10-15 and are all still open:
-the capture screen still blocks while OCR runs, `idb` is still unused, and
-`public/` has no manifest or icons. Item 1 is the follow-up list from the
-first full browser pass (2026-10-07).
+Item 3 was re-checked against code on 2026-10-18 and is still open: the
+capture screen still blocks while OCR runs. Items 4 (read-only offline
+mode) and 5 (service worker) are built on #78 and checked in desktop
+Chrome. Item 1
+is the follow-up list from the first full browser pass (2026-10-07).
 
 ---
 
@@ -209,7 +172,8 @@ Follow-ups from that pass, also done 2026-10-07:
 ### Backend (for `osave-inv-helper-server`)
 
 These are tracked in the server's `AI_DOCS/backend-left-to-do.md`, last
-scanned 2026-10-15. The ones that touch this repo:
+scanned 2026-10-15 (its request logging, §6, has since shipped as #36). The
+ones that touch this repo:
 
 - **Printed totals partly missed** for `17.jpg` (server §3): only
   `total_value` came back, so a wrong Qty still shows "Matches the totals
@@ -236,6 +200,8 @@ scanned 2026-10-15. The ones that touch this repo:
 
 - Rejected rows (an item code already saved on an earlier page of the same
   delivery) — no sample triggered one.
+- An Inv. Tran. No. filled in from sibling pages (#67) — no sample has a
+  blank one; unit-tested.
 - "Load more" (needs > 15 delivery groups; DB has 3), and a true ≤ 375px
   viewport. (Light mode was checked 2026-10-07 — see "Light mode (#18)
   contrast" above; the partial-batch and batch-summary screens weren't
@@ -279,17 +245,56 @@ usable meanwhile. Needed:
 last fetched while they had a connection; nothing is sent to the server
 while offline. This replaces §8's offline-capture plan (photos held in
 IndexedDB and uploaded when the connection returns) — no offline upload
-queue. `idb` is still unused in `src/`. Needed:
+queue.
 
-- Persist the TanStack Query cache (e.g. `@tanstack/query-persist-client`
-  with an IndexedDB persister via `idb`) so search/recent deliveries load
-  offline from the last successful fetch, with a "last updated" note. Clear
-  it on sign-out / store switch so one store's data never shows under
-  another.
-- Block uploads offline: capture/confirm (and quantity/note edits) disabled
-  with a "needs a connection" message, using `src/hooks/use-online-status.ts`
-  (or Next's `useOffline`, which also catches Wi-Fi with no internet).
-- Needs §5's service worker so the app itself opens offline.
+**Built on #78 (2026-10-18), unit-tested and desktop-checked.** Decided
+2026-10-18: saved data is kept **7 days**; a search never run on this phone
+shows **"This search isn't saved on this phone"** (not a search over the
+saved data, whose empty result would read as "not delivered").
+
+- **Saved query cache:** `PersistQueryClientProvider` in
+  `src/app/providers.tsx`; `src/lib/query-client.ts` (gcTime 7 days, only
+  successful `["deliveries", …]` reads younger than 7 days are saved, a
+  `SAVED_DATA_VERSION` buster to bump when a saved shape changes) and
+  `src/lib/query-persister.ts` (`idb`, writes batched 1s). The saved copy
+  is stamped with the store code: restored only under that store, deleted
+  once no store is signed in. `ClearCacheOnStoreChange` clears the cache
+  when another store signs in; sign-out already cleared it.
+- **"Saved" notes:** `savedCopyTime` (`deliveries/lib/query-status.ts`)
+  gives `savedAt` when the data shown couldn't be refreshed (offline,
+  paused, or the refresh failed). The results page shows `SavedCopyNote`;
+  Recent uploads says "· saved Oct 18, 12:39 PM". While the saved copy is
+  read back, search / Recent uploads / item history show loading (`useIsRestoring`)
+  instead of an empty state.
+- **Read-only offline:** `src/hooks/use-online-status.ts` now follows
+  TanStack's `onlineManager` (seeded from `navigator.onLine` at start, so an
+  airplane-mode launch goes straight to the saved copy). `useOcrCapture`,
+  `useDeliveryDraft`, `useDeliveryNote` and `useQuantityCorrection` expose
+  `isOffline` and send nothing; capture, Retry failed, Continue (2+ pages,
+  needs reconcile), Confirm, Save note and quantity Save are disabled with
+  `NeedsConnectionNotice`. A review's edits stay on screen. Mutations use
+  `networkMode: "always"`, so a save never pauses and goes out by itself
+  later.
+- **Item history** now has a status: "isn't saved on this phone" offline,
+  "Couldn't load the history" on failure — it used to say "No corrections
+  yet" for both (found in the browser pass).
+- Wi-Fi with no internet still counts as online: requests fail with their
+  own errors, and saved data gets its note once the refresh fails (after
+  TanStack's retries, ~7s).
+
+Checked in desktop Chrome 2026-10-18 (port 3100, real store 245 sign-in,
+read-only): IndexedDB held exactly the 3 delivery reads under `245`, none
+in Cache Storage. With the `offline` event: the saved note, Save note /
+quantity Save disabled with their notices, "pancake" showed "isn't saved",
+then ran by itself on `online`; capture buttons disabled. With DevTools →
+Offline and a reload: the service worker served the app, Recent uploads came
+from IndexedDB ("saved 12:39 PM"), ITPH1966502 opened from it with all 10
+items. Chrome then reported online with the backend still unreachable (the
+extension re-attaching resets DevTools' emulation), which exercised the
+no-internet path: the note appeared after the retries and History showed
+"Couldn't load". Sign out deleted the saved copy. Not seen live: Confirm
+offline (needs a billed OCR read; hook-tested), and a phone (iOS Safari,
+installed app).
 
 ## 5. PWA (§9)
 
@@ -302,11 +307,47 @@ get an Install button (`beforeinstallprompt`), iOS gets Add to Home Screen
 steps; hidden when installed or dismissed. Note: the installed iPhone app
 doesn't share Safari's localStorage, so staff sign in once more inside it.
 
-Still needed (with §4):
+**Service worker — built on #78 (2026-10-18), desktop-checked.**
+Serwist (`@serwist/turbopack`). `src/app/serwist/[path]/route.ts` bundles
+`src/lib/sw.ts` at build time into `/serwist/sw.js` (served `no-cache`, see
+`next.config.ts`), and `SerwistProvider` in `src/app/providers.tsx`
+registers it (off in dev). Decided 2026-10-18:
 
-- Service worker — network-first for API calls, cache-first for static
-  assets, plus the app shell so it opens offline. The Next docs point to
-  Serwist (has a Turbopack integration).
+- **Precache the whole app:** every `/_next/static` file (incl. the Geist
+  `woff2`) plus each page's HTML (`/`, `/search`, `/search/results`,
+  `/upload`, `/store-session/scan`, new revision each build), so any screen
+  opens offline. Query strings are ignored when matching, so
+  `/search/results?q=…` opens the precached results page. 51 entries,
+  ~1.8MB.
+- **Backend calls are never cached by the service worker** (cross-origin →
+  `NetworkOnly`, ahead of Serwist's `defaultCache`, whose cross-origin rule
+  would cache them). Cache Storage keys by URL, not the store-code header,
+  so a cached search could show under another store. Offline data is §4's
+  job.
+- **Updates wait for staff:** `skipWaiting: false`; a waiting version shows
+  the `AppUpdateBanner` ("Update ready" + Reload, `features/app-update`,
+  `useAppUpdate` hook-tested), which tells it to take over and reloads once
+  it's controlling. Serwist's `reloadOnOnline` is off, since it would reload
+  away a half-filled review when the connection returns.
+
+Checked in desktop Chrome on 2026-10-18 against `next start` (port 3100,
+500px window). The worker registered and controlled the first load, with
+51 precache entries. With the server stopped, `/`, `/upload`,
+`/store-session/scan` and `/search/results?q=ITPH1982020` all opened, Geist
+font included. The results page read its query and sat at "Searching…",
+since saved data is §4's job. A placeholder session in localStorage got
+past the guard; it was removed afterwards. A second run the same day had
+the local backend up (`localhost:3100` added to its `ALLOWED_ORIGINS`) and
+a real store 245 sign-in, read-only. `/health`, `/api/stores/current` and
+the search calls all went through the worker (`NetworkOnly`) with 200s and
+their store headers. Nothing from `localhost:4000` landed in any cache;
+the only runtime caches were the app's own manifest and icon. With the UI
+server stopped, the cached app still loaded live data (ITPH1966502, 10
+items, not opened before in that run). A rebuild + restart showed "Update ready". Reload
+reloaded the page onto the new build (`BUILD_ID` matched), and the old
+build's precache entries were cleared. Not checked: the banner's dismiss
+button (hook-tested), and iOS Safari / the installed iPhone app (needs the
+deploy, HTTPS).
 
 ## 6. Realtime multi-user sync (§8, roadmap phase 4)
 
@@ -407,6 +448,18 @@ the code, passcode and cached deliveries.
     calculated, live until staff type into it); a card under the item list
     sums Total Box / Total Value as the rows stand, to check against paper.
   - #63 (PR #64): repeated item codes warned before Confirm (item 1).
+  - #65 (PR #66): a Transaction date filled in from a sibling page gets the
+    dashed inferred outline; each upload screen opens at the top.
+  - #67 (PR #68, with server #33): the Inv. Tran. No. is cross-checked
+    across a batch's pages, so a misread code (e.g. `ITPH1978G04`) no longer
+    saves as a second, bogus delivery. `upload/lib/sibling-delivery-codes.ts`
+    lists the codes the siblings stand at (a saved sibling counts with the
+    code it was saved under); `useDeliveryDraft` exposes
+    `deliveryCodeConflict` / `deliveryCodeKept` / `keepDeliveryCode`. The
+    review shows "Doesn't match the other pages" with "Use <code>" / "This
+    page is right", and Confirm stays disabled until one is chosen. A blank
+    Inv. Tran. No. also blocks Confirm. A code the server filled from
+    siblings (`deliveryCodeInferred`) gets the dashed outline.
 - **Search flow (flow C):** grouped results, exact-delivery-code
   auto-expand, group pagination (15/page), item virtualization
   (`@tanstack/react-virtual`), shareable URL-driven results page. #23:

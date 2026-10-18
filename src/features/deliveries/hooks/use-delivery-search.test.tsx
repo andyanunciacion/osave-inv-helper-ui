@@ -1,4 +1,4 @@
-import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { IsRestoringProvider, onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -97,6 +97,40 @@ describe("useDeliverySearch", () => {
     } finally {
       onlineManager.setOnline(true);
     }
+  });
+
+  it("shows the saved copy offline, with when it was fetched", async () => {
+    fetchGroupedSearch.mockResolvedValue([group()]);
+    try {
+      const { result } = renderHook(
+        () => useDeliverySearch({ storeCode: "STORE1", query: "cola", range: undefined }),
+        { wrapper },
+      );
+      await waitFor(() => expect(result.current.status).toBe("success"));
+      expect(result.current.savedAt).toBeNull();
+
+      act(() => onlineManager.setOnline(false));
+
+      expect(result.current.status).toBe("success");
+      expect(result.current.groups).toHaveLength(1);
+      expect(result.current.savedAt).toEqual(expect.any(Number));
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it("reports loading, not \"No deliveries found\", while the saved copy is read back", () => {
+    fetchGroupedSearch.mockResolvedValue([group()]);
+    const restoringWrapper = ({ children }: { children: ReactNode }) =>
+      wrapper({ children: <IsRestoringProvider value={true}>{children}</IsRestoringProvider> });
+
+    const { result } = renderHook(
+      () => useDeliverySearch({ storeCode: "STORE1", query: "cola", range: undefined }),
+      { wrapper: restoringWrapper },
+    );
+
+    expect(result.current.status).toBe("loading");
+    expect(fetchGroupedSearch).not.toHaveBeenCalled();
   });
 
   it("fetches grouped results for a text query and reports hasActiveFilters", async () => {

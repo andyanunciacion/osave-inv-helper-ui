@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { NeedsConnectionNotice } from "@/features/offline/components/needs-connection-notice";
 import type { Delivery } from "@/types/schema";
 import {
   DELIVERY_NOTE_MAX_LENGTH,
@@ -26,7 +27,7 @@ export function DeliveryNoteForm({
   onSaved,
   onCancel,
 }: DeliveryNoteFormProps) {
-  const { draft, setDraft, canSave, save, isPending, message } =
+  const { draft, setDraft, canSave, isOffline, save, isPending, message } =
     useDeliveryNote(delivery);
   const inputId = `note-${delivery.delivery_code}`;
 
@@ -55,6 +56,7 @@ export function DeliveryNoteForm({
         autoFocus={Boolean(onCancel)}
         aria-invalid={message?.tone === "error"}
       />
+      {isOffline ? <NeedsConnectionNotice action="Saving a note" /> : null}
       <div className="flex items-center justify-between gap-2">
         <p
           role={message?.tone === "error" ? "alert" : "status"}

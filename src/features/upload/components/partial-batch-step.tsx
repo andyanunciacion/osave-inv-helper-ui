@@ -2,12 +2,15 @@
 
 import { RotateCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NeedsConnectionNotice } from "@/features/offline/components/needs-connection-notice";
 import type { FailedPhoto } from "../hooks/use-ocr-capture";
 
 interface PartialBatchStepProps {
   batchSize: number;
   readCount: number;
   failedPhotos: FailedPhoto[];
+  isOffline: boolean;
+  canContinue: boolean;
   onRetryFailed: () => void;
   onContinue: () => void;
   onStartOver: () => void;
@@ -20,6 +23,8 @@ export function PartialBatchStep({
   batchSize,
   readCount,
   failedPhotos,
+  isOffline,
+  canContinue,
   onRetryFailed,
   onContinue,
   onStartOver,
@@ -55,14 +60,23 @@ export function PartialBatchStep({
         ))}
       </ul>
 
+      {isOffline ? (
+        <NeedsConnectionNotice action="Reading photos" detail="The pages already read are kept." />
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row">
         {retryableCount > 0 ? (
-          <Button type="button" variant="outline" className="sm:flex-1" onClick={onRetryFailed}>
+          <Button
+            type="button"
+            variant="outline"
+            className="sm:flex-1"
+            onClick={onRetryFailed}
+            disabled={isOffline}
+          >
             <RotateCw className="size-4" aria-hidden="true" />
             Retry {retryableCount} failed
           </Button>
         ) : null}
-        <Button type="button" className="sm:flex-1" onClick={onContinue}>
+        <Button type="button" className="sm:flex-1" onClick={onContinue} disabled={!canContinue}>
           Continue with {readCount}
         </Button>
       </div>
