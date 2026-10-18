@@ -111,7 +111,7 @@ export function CaptureStep({ status, error, progress, isOffline, onFilesSelecte
           Choose photos
         </Button>
       </div>
-      {isOffline ? <NeedsConnectionNotice action="Reading a receipt" className="text-left" /> : null}
+      {isOffline ? <NeedsConnectionNotice action="Reading a receipt" /> : null}
     </div>
   );
 }

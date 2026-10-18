@@ -292,9 +292,22 @@ from IndexedDB ("saved 12:39 PM"), ITPH1966502 opened from it with all 10
 items. Chrome then reported online with the backend still unreachable (the
 extension re-attaching resets DevTools' emulation), which exercised the
 no-internet path: the note appeared after the retries and History showed
-"Couldn't load". Sign out deleted the saved copy. Not seen live: Confirm
-offline (needs a billed OCR read; hook-tested), and a phone (iOS Safari,
-installed app).
+"Couldn't load". Sign out deleted the saved copy.
+
+**End-to-end pass, 2026-10-18** (desktop Chrome, `next start` on 3100, local
+backend, real store 245 sign-in, 2 billed OCR reads): `13.jfif` →
+review (ITPH1978604, 7 items, totals match) → offline: Confirm disabled with
+its notice, a Warehouse edit kept across offline/online → Confirm saved 7
+items → note saved on the summary (Save note disabled offline) → the same
+photo again: "Nothing new to save" → search: ITPH1978604 top of Recent
+uploads, note shown → item 3179 corrected 2→3 then back, both in History →
+DevTools Offline + reload: the delivery, its note and 3179's history opened
+from the saved copy, quantity Save disabled, 3180's history "isn't saved on
+this phone" → rebuild: banner, dismiss hides it, it returns on the next
+load, Reload switched builds, session kept → install tip shows with "Install
+app" once its dismissal is cleared → sign out deleted the saved copy. The
+test delivery (1 delivery, 7 items, 2 history rows) was then deleted from the
+DB with the user's OK. Not seen live: a phone (iOS Safari, installed app).
 
 ## 5. PWA (§9)
 
@@ -367,7 +380,8 @@ Item **quantity** edit + change history is done (#23). Still not built:
 deleting a delivery or item, and editing any field other than quantity
 (`frontend-contract.md` §8 scopes the backend's update endpoint to quantity
 only). main-file.md §12 lists this as an open question; its recommendation is
-soft-delete + edit log. Not required for MVP.
+soft-delete + edit log. Not required for MVP. (A quantity correction leaving
+the total stale is §9, not this.)
 
 ## 8. Auth
 
@@ -387,6 +401,41 @@ holding an unlocked phone with the app has that store's access until someone
 taps "Sign out" below the `/search` card (`StoreSessionFooter` /
 `SignOutButton` / `useSignOut`), which clears
 the code, passcode and cached deliveries.
+
+## 9. A quantity correction doesn't update the item's total
+
+**Next after #78.** `update_delivery_item_quantity` (server,
+`20261008000000_atomic_delivery_writes.sql`) only sets `quantity`, so
+`total_item_price` keeps the printed amount. Seen in the 2026-10-18 e2e
+pass: item 3179 read "3 BOX" beside ₱2,712.00, the 2-box total. Search shows
+the two side by side, and it's the same mismatch the review screen flags
+with `hasPriceMismatch`. Any value report would sum stale totals.
+
+**Decided 2026-10-18:** the total is recalculated in the same transaction as
+the quantity: round(new Qty × Unit/Box × Price, 2), the formula `withAutoTotal`
+and `hasPriceMismatch` already use. It's left unchanged when Unit/Box or Price
+is missing. The history row records the previous and new totals, so the
+printed amount isn't lost. Its own issue and branch in both repos, after #78
+merges into `develop` (it touches `item-history-panel.tsx`, which #78
+changed).
+
+- **Backend:** a new migration adding nullable `previous_total_item_price` /
+  `new_total_item_price` to `delivery_item_updates`, and a `create or replace`
+  of the function with the **same signature** (so the deployed server keeps
+  working and gets the recalculation as soon as it runs). Mirror it in
+  `supabase/schema.sql`, add the columns to `DELIVERY_ITEM_UPDATE_COLUMNS`
+  (`src/routes/deliveries.ts`), and update contract §8 (also drop its stale
+  "no frontend hook yet"). Migrations are run by hand in the Supabase SQL
+  editor, on the DB production shares — the user runs or OKs it.
+- **Frontend:** optional `previous_total_item_price` / `new_total_item_price`
+  on `DeliveryItemUpdate` (an older server or a saved offline copy won't have
+  them, so no `SAVED_DATA_VERSION` bump), a tested `formatTotalChange` in
+  `deliveries/lib/format.ts`, and each History line shows it: "2 BOX → 3 BOX ·
+  ₱2,712.00 → ₱4,068.00 · …". The row's total already refreshes through the
+  existing `["deliveries", storeCode]` invalidation.
+- **Verify:** an e2e pass like 2026-10-18. Upload `13.jfif`, correct 3179 from
+  2 → 3 and expect ₱4,068.00 (3 × 24 × 56.50), then back to 2. Delete the test
+  delivery afterwards with the user's OK.
 
 ---
 
