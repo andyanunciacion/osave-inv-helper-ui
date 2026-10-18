@@ -404,7 +404,27 @@ the code, passcode and cached deliveries.
 
 ## 9. A quantity correction doesn't update the item's total
 
-**Next after #78.** `update_delivery_item_quantity` (server,
+**Built and checked 2026-10-18** — UI #80
+(`80-quantity-edits-doesnt-change-total-amount`), server #42
+(`42-quantity-edits-doesnt-change-total-amount`, migration
+`20261018000000_recalculate_total_on_quantity_update.sql`, applied to the
+Supabase project 2026-10-18 — deploy the server only with or after it).
+Unit-tested (`formatTotalChange`). One addition to the plan: resubmitting
+the same quantity leaves the total alone too (still no history row), so a
+printed total that's off by rounding isn't silently replaced.
+
+E2e pass (desktop Chrome, `next dev` on 3000, local backend, real store
+245, 1 billed OCR read): `13.jfif` → ITPH1978604, 7 items, saved → 3179
+corrected 2 → 3: the row read "3 BOX · 24/box ₱4,068.00", History "2 BOX →
+3 BOX · ₱2,712.00 → ₱4,068.00 · …" → back to 2: ₱2,712.00 and a second
+line "3 BOX → 2 BOX · ₱4,068.00 → ₱2,712.00". The DB held both totals on
+both history rows. A direct same-quantity RPC call returned `update: null`
+with the total unchanged. The test delivery (1 delivery, 7 items, 2 history
+rows) was then deleted with the user's OK. Not seen live: a correction on a
+row with no Unit/Box or Price (total left as is, no total on the History
+line — unit-tested on the frontend side only).
+
+Original note: `update_delivery_item_quantity` (server,
 `20261008000000_atomic_delivery_writes.sql`) only sets `quantity`, so
 `total_item_price` keeps the printed amount. Seen in the 2026-10-18 e2e
 pass: item 3179 read "3 BOX" beside ₱2,712.00, the 2-box total. Search shows
