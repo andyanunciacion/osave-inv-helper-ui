@@ -49,6 +49,11 @@ export interface DeliveryItemUpdate {
   store_code: string;
   previous_quantity: number | null;
   new_quantity: number;
+  // The total before and after the server recalculated it from the new
+  // quantity. Optional: an older server or a saved offline copy won't have
+  // them, and they're null on corrections made before the recalculation.
+  previous_total_item_price?: number | null;
+  new_total_item_price?: number | null;
   reason: string | null;
   created_at: string;
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatCurrency, formatItemLabel, formatQuantity, hasPriceMismatch } from "./format";
+import {
+  formatCurrency,
+  formatItemLabel,
+  formatQuantity,
+  formatTotalChange,
+  hasPriceMismatch,
+} from "./format";
 
 describe("formatCurrency", () => {
   it("groups thousands and keeps two decimals, like the receipt prints", () => {
@@ -11,6 +17,25 @@ describe("formatCurrency", () => {
 
   it("shows a dash when the amount is unknown", () => {
     expect(formatCurrency(null)).toBe("—");
+  });
+});
+
+describe("formatTotalChange", () => {
+  it("shows the total before and after a correction", () => {
+    expect(formatTotalChange(2712, 4068)).toBe("₱2,712.00 → ₱4,068.00");
+  });
+
+  it("shows a dash for a total that was blank before", () => {
+    expect(formatTotalChange(null, 4068)).toBe("— → ₱4,068.00");
+  });
+
+  it("is null when the total didn't change (Unit/Box or price missing)", () => {
+    expect(formatTotalChange(2712, 2712)).toBeNull();
+    expect(formatTotalChange(null, null)).toBeNull();
+  });
+
+  it("is null for a correction recorded before totals were kept", () => {
+    expect(formatTotalChange(undefined, undefined)).toBeNull();
   });
 });
 

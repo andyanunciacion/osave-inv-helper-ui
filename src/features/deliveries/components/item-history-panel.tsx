@@ -10,7 +10,7 @@ import { NeedsConnectionNotice } from "@/features/offline/components/needs-conne
 import type { DeliveryItem } from "@/types/schema";
 import { useItemHistory } from "../hooks/use-item-history";
 import { useQuantityCorrection } from "../hooks/use-quantity-correction";
-import { formatQuantity } from "../lib/format";
+import { formatQuantity, formatTotalChange } from "../lib/format";
 
 interface ItemHistoryPanelProps {
   item: DeliveryItem;
@@ -87,15 +87,22 @@ export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
           <p className="text-xs text-muted-foreground">No corrections yet.</p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {history.map((entry) => (
-              <li key={entry.id} className="text-xs text-muted-foreground">
-                {formatQuantity(entry.previous_quantity, item.unit)} →{" "}
-                {formatQuantity(entry.new_quantity, item.unit)}
-                {" · "}
-                {format(new Date(entry.created_at), "MMM d, yyyy h:mm a")}
-                {entry.reason ? ` · ${entry.reason}` : ""}
-              </li>
-            ))}
+            {history.map((entry) => {
+              const totalChange = formatTotalChange(
+                entry.previous_total_item_price,
+                entry.new_total_item_price,
+              );
+              return (
+                <li key={entry.id} className="text-xs text-muted-foreground">
+                  {formatQuantity(entry.previous_quantity, item.unit)} →{" "}
+                  {formatQuantity(entry.new_quantity, item.unit)}
+                  {totalChange ? ` · ${totalChange}` : ""}
+                  {" · "}
+                  {format(new Date(entry.created_at), "MMM d, yyyy h:mm a")}
+                  {entry.reason ? ` · ${entry.reason}` : ""}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

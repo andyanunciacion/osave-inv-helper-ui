@@ -23,6 +23,20 @@ export function formatQuantity(
   return [amount, perBox].filter(Boolean).join(" · ") || "—";
 }
 
+// A quantity correction's History line, e.g. "₱2,712.00 → ₱4,068.00". Null
+// when there's no total change to show: the correction predates the
+// recalculation (neither total recorded), or the total stayed put because
+// Unit/Box or the price is missing.
+export function formatTotalChange(
+  previous: number | null | undefined,
+  next: number | null | undefined,
+): string | null {
+  const before = previous ?? null;
+  const after = next ?? null;
+  if (before === after) return null;
+  return `${formatCurrency(before)} → ${formatCurrency(after)}`;
+}
+
 // e.g. "SAN-1074 Laundry Detergent 1kg" — code first, since staff scan by
 // code more often than by name.
 export function formatItemLabel(itemCode: string | null, itemName: string): string {
