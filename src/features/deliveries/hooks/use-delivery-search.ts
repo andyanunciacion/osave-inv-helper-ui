@@ -1,7 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useIsRestoring, useQuery } from "@tanstack/react-query";
 import type { DateRange } from "react-day-picker";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { fetchGroupedSearch } from "../lib/api";
-import { toQueryStatus, type QueryStatus } from "../lib/query-status";
+import { savedCopyTime, toQueryStatus, type QueryStatus } from "../lib/query-status";
 import type { DeliverySearchResultGroup } from "../types";
 
 // §6 flow C: free-text query matched against item_code/item_name/
@@ -18,8 +19,13 @@ export interface UseDeliverySearchResult {
   groups: DeliverySearchResultGroup[];
   hasActiveFilters: boolean;
   // Lets the results screen tell "still searching" / "couldn't reach the
-  // server" apart from a genuine "no deliveries found".
+  // server" apart from a genuine "no deliveries found". Offline, a search
+  // already run on this phone is "success" (its saved copy); one that wasn't
+  // is "offline".
   status: QueryStatus;
+  // Set when the results shown are this phone's saved copy and couldn't be
+  // refreshed: when they were fetched (ms since epoch).
+  savedAt: number | null;
   retry: () => void;
 }
 
@@ -30,8 +36,10 @@ export function useDeliverySearch({
 }: UseDeliverySearchParams): UseDeliverySearchResult {
   const trimmedQuery = query.trim();
   const hasActiveFilters = Boolean(trimmedQuery) || Boolean(range?.from);
+  const isRestoring = useIsRestoring();
+  const isOnline = useOnlineStatus();
 
-  const { data, isError, isLoading, isPaused, refetch } = useQuery({
+  const { data, dataUpdatedAt, isError, isLoading, isPaused, refetch } = useQuery({
     queryKey: ["deliveries", storeCode, "search", trimmedQuery, range?.from, range?.to],
     queryFn: () => fetchGroupedSearch(storeCode as string, trimmedQuery, range),
     enabled: Boolean(storeCode) && hasActiveFilters,
@@ -40,7 +48,8 @@ export function useDeliverySearch({
   return {
     groups: data ?? [],
     hasActiveFilters,
-    status: toQueryStatus({ data, isError, isLoading, isPaused }),
+    status: toQueryStatus({ data, isError, isLoading, isPaused, isRestoring: isRestoring && hasActiveFilters }),
+    savedAt: savedCopyTime({ data, dataUpdatedAt, isError, isPaused, isOnline }),
     retry: () => void refetch(),
   };
 }

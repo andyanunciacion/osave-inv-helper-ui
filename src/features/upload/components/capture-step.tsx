@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { AlertTriangle, Camera, ImagePlus, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { NeedsConnectionNotice } from "@/features/offline/components/needs-connection-notice";
 import type { CaptureError, CaptureProgress, CaptureStatus } from "../hooks/use-ocr-capture";
 
 // `.jfif` is listed explicitly: Chrome on Windows doesn't treat it as an
@@ -15,6 +16,7 @@ interface CaptureStepProps {
   status: CaptureStatus;
   error: CaptureError | null;
   progress: CaptureProgress | null;
+  isOffline: boolean;
   onFilesSelected: (files: File[]) => void;
 }
 
@@ -24,7 +26,7 @@ interface CaptureStepProps {
 // it doesn't support multi-select on mobile, so a second, camera-less input
 // (`multiple`) covers picking several already-taken photos at once for a
 // multi-page/multi-receipt batch upload.
-export function CaptureStep({ status, error, progress, onFilesSelected }: CaptureStepProps) {
+export function CaptureStep({ status, error, progress, isOffline, onFilesSelected }: CaptureStepProps) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -94,15 +96,22 @@ export function CaptureStep({ status, error, progress, onFilesSelected }: Captur
         }}
       />
       <div className="flex gap-2">
-        <Button type="button" size="lg" onClick={() => cameraInputRef.current?.click()}>
+        <Button type="button" size="lg" disabled={isOffline} onClick={() => cameraInputRef.current?.click()}>
           <Camera className="size-4" aria-hidden="true" />
           Capture receipt
         </Button>
-        <Button type="button" size="lg" variant="outline" onClick={() => galleryInputRef.current?.click()}>
+        <Button
+          type="button"
+          size="lg"
+          variant="outline"
+          disabled={isOffline}
+          onClick={() => galleryInputRef.current?.click()}
+        >
           <ImagePlus className="size-4" aria-hidden="true" />
           Choose photos
         </Button>
       </div>
+      {isOffline ? <NeedsConnectionNotice action="Reading a receipt" /> : null}
     </div>
   );
 }

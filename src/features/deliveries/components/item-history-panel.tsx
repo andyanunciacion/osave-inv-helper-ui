@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NeedsConnectionNotice } from "@/features/offline/components/needs-connection-notice";
 import type { DeliveryItem } from "@/types/schema";
 import { useItemHistory } from "../hooks/use-item-history";
 import { useQuantityCorrection } from "../hooks/use-quantity-correction";
@@ -24,8 +25,8 @@ export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
   const [draftQuantity, setDraftQuantity] = useState(String(item.quantity ?? ""));
   const [reason, setReason] = useState("");
 
-  const { history, isLoading } = useItemHistory(item.delivery_code, item.id, true);
-  const { submit, isPending, message } = useQuantityCorrection(item);
+  const { history, status } = useItemHistory(item.delivery_code, item.id, true);
+  const { submit, isPending, isOffline, message } = useQuantityCorrection(item);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -58,10 +59,11 @@ export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
             placeholder="e.g. recount"
           />
         </div>
-        <Button type="submit" disabled={isPending}>
+        <Button type="submit" disabled={isPending || isOffline}>
           {isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : "Save"}
         </Button>
       </form>
+      {isOffline ? <NeedsConnectionNotice action="Correcting a quantity" /> : null}
       {message ? (
         <p
           role={message.tone === "error" ? "alert" : "status"}
@@ -73,8 +75,14 @@ export function ItemHistoryPanel({ item }: ItemHistoryPanelProps) {
 
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">History</span>
-        {isLoading ? (
+        {status === "loading" || status === "idle" ? (
           <p className="text-xs text-muted-foreground">Loading…</p>
+        ) : status === "offline" ? (
+          <p className="text-xs text-muted-foreground">
+            This history isn&apos;t saved on this phone. Connect to see it.
+          </p>
+        ) : status === "error" ? (
+          <p className="text-xs text-muted-foreground">Couldn&apos;t load the history. Close and reopen the item to try again.</p>
         ) : history.length === 0 ? (
           <p className="text-xs text-muted-foreground">No corrections yet.</p>
         ) : (

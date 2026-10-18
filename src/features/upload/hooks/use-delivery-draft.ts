@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useCreateDelivery } from "@/features/deliveries/hooks/use-create-delivery";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { hasPriceMismatch } from "@/features/deliveries/lib/format";
 import type { CreateDeliveryResult, NewDeliveryInput } from "@/features/deliveries/types";
 import type { ItemUnit } from "@/types/schema";
@@ -79,6 +80,9 @@ export interface UseDeliveryDraftResult {
   // Grand totals summed from the rows as they stand (not the receipt's
   // printed ones), for staff to check against the paper.
   summary: DraftSummary;
+  // Offline mode is read-only (frontend-left-to-do.md §4): Confirm waits for
+  // the connection. Edits stay in the draft meanwhile.
+  isOffline: boolean;
   canConfirm: boolean;
   stage: DraftStage;
   result: CreateDeliveryResult | null;
@@ -172,6 +176,7 @@ export function useDeliveryDraft(
   const [result, setResult] = useState<CreateDeliveryResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { submitDelivery } = useCreateDelivery();
+  const isOffline = !useOnlineStatus();
 
   const receiptStoreCode = header.receipt_store_code.trim().toUpperCase();
   const missingReceiptStoreCode = !receiptStoreCode;
@@ -226,6 +231,7 @@ export function useDeliveryDraft(
   const summary = useMemo(() => summarizeDraft(items.filter(hasContent)), [items]);
 
   const canConfirm =
+    !isOffline &&
     !storeMismatch &&
     !missingReceiptStoreCode &&
     !missingDeliveryDate &&
@@ -330,6 +336,7 @@ export function useDeliveryDraft(
     totalsCheck,
     repeatedItems,
     summary,
+    isOffline,
     canConfirm,
     stage,
     result,

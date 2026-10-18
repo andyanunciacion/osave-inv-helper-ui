@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeliverySearch } from "@/features/deliveries/hooks/use-delivery-search";
+import { SavedCopyNote } from "@/features/offline/components/saved-copy-note";
 import { useStoreSession } from "@/features/store-session/hooks/use-store-session";
 import { useResultsFilters } from "../hooks/use-results-filters";
 import { ResultsStatus } from "./results-status";
@@ -13,11 +14,16 @@ import { SearchResults } from "./search-results";
 export function SearchResultsPage() {
   const { storeCode } = useStoreSession();
   const { query, range } = useResultsFilters();
-  const { groups, status, retry } = useDeliverySearch({ storeCode, query, range });
+  const { groups, status, savedAt, retry } = useDeliverySearch({ storeCode, query, range });
 
   if (status === "loading" || status === "offline" || status === "error") {
     return <ResultsStatus status={status} onRetry={retry} />;
   }
 
-  return <SearchResults groups={groups} />;
+  return (
+    <div className="flex flex-col gap-3">
+      {savedAt !== null ? <SavedCopyNote savedAt={savedAt} /> : null}
+      <SearchResults groups={groups} />
+    </div>
+  );
 }

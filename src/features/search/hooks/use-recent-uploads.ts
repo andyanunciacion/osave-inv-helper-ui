@@ -7,11 +7,13 @@ import type { RecentUpload } from "../types";
 export interface UseRecentUploadsResult {
   uploads: RecentUpload[];
   isLoading: boolean;
+  // Set when the list is this phone's saved copy (offline): when it was fetched.
+  savedAt: number | null;
 }
 
 export function useRecentUploads(): UseRecentUploadsResult {
   const { storeCode } = useStoreSession();
-  const { groups, isLoading } = useRecentDeliveries(storeCode);
+  const { groups, isLoading, savedAt } = useRecentDeliveries(storeCode);
 
   const uploads: RecentUpload[] = groups.map((group) => ({
     deliveryCode: group.delivery.delivery_code,
@@ -19,5 +21,5 @@ export function useRecentUploads(): UseRecentUploadsResult {
     itemCount: group.items.length,
   }));
 
-  return { uploads, isLoading };
+  return { uploads, isLoading, savedAt };
 }
