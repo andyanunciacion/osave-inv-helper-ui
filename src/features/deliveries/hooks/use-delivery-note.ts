@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import type { Delivery } from "@/types/schema";
 import { useUpdateDeliveryNote } from "./use-update-delivery-note";
 
@@ -16,8 +17,11 @@ export interface DeliveryNoteMessage {
 export interface UseDeliveryNoteResult {
   draft: string;
   setDraft: (value: string) => void;
-  // The draft differs from what's saved, so there's something to send.
+  // The draft differs from what's saved, so there's something to send, and
+  // there's a connection to send it on.
   canSave: boolean;
+  // Offline mode is read-only (frontend-left-to-do.md §4).
+  isOffline: boolean;
   // Resolves true once the note is saved, so a caller can close its editor.
   save: () => Promise<boolean>;
   isPending: boolean;
@@ -31,13 +35,14 @@ function normalizeNote(value: string): string | null {
 
 export function useDeliveryNote(delivery: Delivery): UseDeliveryNoteResult {
   const { updateNote, isPending } = useUpdateDeliveryNote();
+  const isOffline = !useOnlineStatus();
   // `?? null`: a backend without the note column yet omits the field.
   const [savedNote, setSavedNote] = useState<string | null>(delivery.note ?? null);
   const [draft, setDraftState] = useState(savedNote ?? "");
   const [message, setMessage] = useState<DeliveryNoteMessage | null>(null);
 
   const note = normalizeNote(draft);
-  const canSave = note !== savedNote;
+  const canSave = note !== savedNote && !isOffline;
 
   // A "Note saved" message would be stale the moment the text changes again.
   const setDraft = (value: string) => {
@@ -69,5 +74,5 @@ export function useDeliveryNote(delivery: Delivery): UseDeliveryNoteResult {
     }
   };
 
-  return { draft, setDraft, canSave, save, isPending, message };
+  return { draft, setDraft, canSave, isOffline, save, isPending, message };
 }

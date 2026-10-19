@@ -1,3 +1,4 @@
+import { onlineManager } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OcrError } from "../lib/api";
@@ -414,5 +415,45 @@ describe("useOcrCapture", () => {
     act(() => result.current.advance());
     expect(result.current.currentIndex).toBe(1);
     expect(result.current.isLastPage).toBe(true);
+  });
+
+  it("sends no photos while offline", () => {
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => useOcrCapture());
+
+      act(() => result.current.captureFiles([file()], "245"));
+
+      expect(result.current.isOffline).toBe(true);
+      expect(result.current.status).toBe("idle");
+      expect(runOcr).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it("offline, keeps a partial batch's read pages but waits to cross-check them", async () => {
+    runOcr
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockResolvedValueOnce(ocrApiResponse())
+      .mockRejectedValueOnce(new OcrError("ocr_failed", "Vision couldn't read the photo"));
+    const { result } = renderHook(() => useOcrCapture());
+    act(() => result.current.captureFiles([file("1.jpg"), file("2.jpg"), file("3.jpg")], "245"));
+    await waitFor(() => expect(result.current.status).toBe("partial"));
+
+    onlineManager.setOnline(false);
+    try {
+      await waitFor(() => expect(result.current.isOffline).toBe(true));
+      expect(result.current.canContinue).toBe(false);
+      act(() => result.current.continueWithRead());
+      act(() => result.current.retryFailed());
+
+      expect(result.current.status).toBe("partial");
+      expect(result.current.readCount).toBe(2);
+      expect(runOcr).toHaveBeenCalledTimes(3);
+      expect(runOcrReconcile).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });

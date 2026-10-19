@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -131,5 +131,22 @@ describe("useDeliveryNote", () => {
 
     act(() => result.current.setDraft("ok, 1 box wet"));
     expect(result.current.message).toBeNull();
+  });
+
+  it("can't save offline, and sends nothing", async () => {
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => useDeliveryNote(delivery()), { wrapper });
+      act(() => result.current.setDraft("1 box wet"));
+
+      expect(result.current.isOffline).toBe(true);
+      expect(result.current.canSave).toBe(false);
+      await act(async () => {
+        await result.current.save();
+      });
+      expect(updateDeliveryNote).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });

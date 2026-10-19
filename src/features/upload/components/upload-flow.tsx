@@ -57,6 +57,8 @@ export function UploadFlow() {
         batchSize={capture.batchSize}
         readCount={capture.readCount}
         failedPhotos={capture.failedPhotos}
+        isOffline={capture.isOffline}
+        canContinue={capture.canContinue}
         onRetryFailed={capture.retryFailed}
         onContinue={capture.continueWithRead}
         onStartOver={startOver}
@@ -70,6 +72,7 @@ export function UploadFlow() {
         status={status}
         error={error}
         progress={capture.progress}
+        isOffline={capture.isOffline}
         onFilesSelected={(files) => captureFiles(files, storeCode ?? "")}
       />
     );

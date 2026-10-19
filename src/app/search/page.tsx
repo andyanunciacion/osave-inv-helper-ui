@@ -13,9 +13,9 @@ export default function SearchPage() {
           <main className="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
             <SearchPanel />
           </main>
-          <InstallTip />
           <StoreSessionFooter />
         </div>
+        <InstallTip />
       </div>
     </RequireStoreSession>
   );

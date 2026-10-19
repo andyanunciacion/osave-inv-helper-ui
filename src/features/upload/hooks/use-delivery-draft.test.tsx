@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -468,5 +468,24 @@ describe("useDeliveryDraft", () => {
     act(() => result.current.removeItem(idToRemove));
     expect(result.current.items).toHaveLength(1);
     expect(result.current.items[0].localId).not.toBe(idToRemove);
+  });
+
+  it("holds Confirm while offline, keeping the edits, and allows it once back online", () => {
+    onlineManager.setOnline(false);
+    try {
+      const { result } = renderHook(() => useDeliveryDraft(ocrResult(), "STORE1"), { wrapper });
+      act(() => result.current.updateItemField(result.current.items[0].localId, "item_name", "Item A (edited)"));
+
+      expect(result.current.isOffline).toBe(true);
+      expect(result.current.canConfirm).toBe(false);
+      act(() => result.current.confirm());
+      expect(createDeliveryRequest).not.toHaveBeenCalled();
+
+      act(() => onlineManager.setOnline(true));
+      expect(result.current.canConfirm).toBe(true);
+      expect(result.current.items[0].item_name).toBe("Item A (edited)");
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });

@@ -15,10 +15,10 @@ export default function Home() {
         <main className="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
           <StoreCodeForm />
         </main>
-        {/* Installing before signing in saves a second sign-in: the installed
-            iPhone app doesn't share Safari's saved store session. */}
-        <InstallTip />
       </div>
+      {/* Installing before signing in saves a second sign-in: the installed
+          iPhone app doesn't share Safari's saved store session. */}
+      <InstallTip />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/features/deliveries/lib/format";
+import { NeedsConnectionNotice } from "@/features/offline/components/needs-connection-notice";
 import { cn } from "@/lib/utils";
 import type { UseDeliveryDraftResult } from "../hooks/use-delivery-draft";
 import type { TotalsMismatch } from "../lib/receipt-totals";
@@ -88,6 +89,7 @@ export function ReviewStep({
     totalsCheck,
     repeatedItems,
     summary,
+    isOffline,
     canConfirm,
     stage,
     submitError,
@@ -313,6 +315,10 @@ export function ReviewStep({
           <AlertTitle>Couldn&apos;t save</AlertTitle>
           <AlertDescription>{submitError}</AlertDescription>
         </Alert>
+      ) : null}
+
+      {isOffline ? (
+        <NeedsConnectionNotice action="Confirming a delivery" detail="Your edits stay here until you're back online." />
       ) : null}
 
       <div className="flex gap-2">
