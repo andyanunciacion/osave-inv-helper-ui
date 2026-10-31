@@ -8,7 +8,7 @@ import { createSerwistRoute } from "@serwist/turbopack";
 // visited. The HTML names this build's hashed chunks, so it gets a new
 // revision on every build rather than a commit hash: a rebuild of the same
 // commit with different env vars has different chunks.
-const PAGES = ["/", "/search", "/search/results", "/upload", "/store-session/scan"];
+const PAGES = ["/", "/search", "/search/results", "/upload", "/store-session/scan", "/privacy"];
 const revision = randomUUID();
 
 export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } = createSerwistRoute({
