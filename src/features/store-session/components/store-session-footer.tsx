@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { useStoreSession } from "../hooks/use-store-session";
 import { SignOutButton } from "./sign-out-button";
 
@@ -13,6 +15,10 @@ export function StoreSessionFooter() {
       <span>Store {storeCode}</span>
       <span aria-hidden="true">·</span>
       <SignOutButton />
+      <span aria-hidden="true">·</span>
+      <Button variant="ghost" nativeButton={false} render={<Link href="/privacy" />}>
+        Privacy
+      </Button>
     </footer>
   );
 }
